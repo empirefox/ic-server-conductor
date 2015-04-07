@@ -22,3 +22,5 @@ _testmain.go
 *.exe
 *.test
 *.prof
+
+ic-server-ws-signal

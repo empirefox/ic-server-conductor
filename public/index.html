@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>PeerConnection server test page</title>
+        <script src="RTCPeerConnection-v1.5.js"></script>
+		<script src="main.js"></script>
+	</head>
+	<body>
+		<div id="container">
+			<div id="remote">
+				<video id="remote-video" width="50%" height="50%"></video>
+			</div>
+		</div>
+		Server:
+		<input type="text" id="server" value="http://127.0.0.1:9999" />
+		<br>
+		Your name:
+		<input type="text" id="local" value="myclient"/>
+		<button id="connect" onclick="connect();">
+			Connect
+		</button>
+		<button disabled="true" id="disconnect" onclick="disconnect();">
+			Disconnect
+		</button>
+		<br>
+		<button onclick="document.getElementById('debug').innerHTML='';">
+			Clear log
+		</button>
+		<pre id="debug"></pre>
+		<br>
+		<hr>
+	</body>
+</html>
