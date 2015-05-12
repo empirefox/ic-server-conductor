@@ -13,12 +13,12 @@ function createOffer() {
 
 		onICE : function(candidate) {
 			console.log("onicecandidate:", candidate);
-            candidate = {
-                type : "candidate",
-                sdpMLineIndex : candidate.sdpMLineIndex,
-                candidate : candidate.candidate
-            };
-            sendToPeer(JSON.stringify(candidate));
+			candidate = {
+				type : "candidate",
+				sdpMLineIndex : candidate.sdpMLineIndex,
+				candidate : candidate.candidate
+			};
+			sendToPeer(JSON.stringify(candidate));
 		},
 		onRemoteStream : function(stream) {
 			console.log("Remote stream added:", URL.createObjectURL(event.stream));
@@ -39,7 +39,7 @@ function createOffer() {
 }
 
 function startWs() {
-	ws = new WebSocket('ws://127.0.0.1:9999/many');
+	ws = new WebSocket('ws://' + window.location.host + '/many');
 	ws.onopen = function() {
 		trace("ws opened");
 		createOffer();

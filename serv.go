@@ -26,7 +26,6 @@ func readPump(ws *websocket.Conn, to chan []byte, name string) {
 
 func writePump(to *websocket.Conn, msgChan chan []byte, name string) {
 	defer func() {
-		to.Close()
 		glog.Infoln(name, "ws closed")
 	}()
 	for msg := range msgChan {
@@ -53,10 +52,11 @@ func serveSrc(ws *websocket.Conn) {
 func serveDest(ws *websocket.Conn) {
 	defer ws.Close()
 
-	go readPump(ws, msgToSrcChan, "dst")
-
 	// send msg to home
-	writePump(ws, msgToDestChan, "dst")
+	go writePump(ws, msgToDestChan, "dst")
+
+	readPump(ws, msgToSrcChan, "dst")
+	msgToSrcChan <- []byte(`{"type":"bye"}`)
 
 	// ping
 	//	ticker := time.NewTicker(pingPeriod)

@@ -24,3 +24,4 @@ _testmain.go
 *.prof
 
 ic-server-ws-signal
+*.zargo~
