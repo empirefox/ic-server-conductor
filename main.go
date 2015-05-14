@@ -116,20 +116,21 @@ func main() {
 		res := make(chan *websocket.Conn)
 		h.sigResWaitMap[cmd.Reciever] = res
 		room.SendCtrlToOne <- cmdStr
+		var resWs *websocket.Conn
 		select {
-		case resWs := <-res:
-			ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-			if err != nil {
-				glog.Errorln(err)
-				return
-			}
-			defer ws.Close()
-			Pipe(ws, resWs)
-			res <- nil
+		case resWs = <-res:
 		case <-time.After(time.Second * 15):
 			delete(h.sigResWaitMap, cmd.Reciever)
 			return
 		}
+		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			glog.Errorln(err)
+			return
+		}
+		defer ws.Close()
+		Pipe(ws, resWs)
+		res <- nil
 	})
 
 	router.Run(*addr)

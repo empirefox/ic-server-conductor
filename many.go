@@ -80,9 +80,8 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 	if err != nil {
 		glog.Errorln(err)
 		return
-	} else {
-		send <- cameraList
 	}
+	send <- cameraList
 
 	for {
 		_, b, err := ws.ReadMessage()
