@@ -30,10 +30,10 @@ type ControlRoom struct {
 	SendCtrlToOne chan []byte
 }
 
-func NewControlRoom(one *One, send chan []byte) *ControlRoom {
+func NewControlRoom(one *One) *ControlRoom {
 	return &ControlRoom{
 		One:           one,
-		SendCtrlToOne: send,
+		SendCtrlToOne: make(chan []byte, 64),
 		Participants:  make(map[int64]*ManyControlConn),
 	}
 }
@@ -62,17 +62,16 @@ func oneControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 		glog.Errorln(err)
 		return
 	}
-
-	// registry to globel
-	// registry a chan to receive conn of many
-	// and send the chan to signaling conn
-	send := make(chan []byte, 64)
-	one := ione.(*One)
-	room := NewControlRoom(one, send)
+	one, ok := ione.(*One)
+	if !ok {
+		glog.Errorln("One struct error")
+		return
+	}
+	room := NewControlRoom(one)
 	h.reg <- room
 	defer func() { h.unreg <- room }()
 
-	go writing(ws, send)
+	go writing(ws, room.SendCtrlToOne)
 
 	glog.Infoln("starting read from one ctrl")
 
@@ -85,7 +84,7 @@ func oneControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 		glog.Infoln("From one client:", string(b))
 		if !bytes.HasPrefix(b, []byte("one:")) {
 			glog.Errorln("Wrong message from one")
-			return
+			continue
 		}
 		raws := bytes.SplitN(b, []byte{':'}, 3)
 
@@ -105,4 +104,21 @@ func OnIpcamsInfo(room *ControlRoom, info []byte) {
 		return
 	}
 	room.Cameras = ipcams
+}
+
+func oneSignaling(h *Hub) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		glog.Infoln("one response signaling coming")
+		res, err := h.RemoveReciever(c.Params.ByName("reciever"))
+		if err != nil {
+			panic(err)
+		}
+		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			panic(err)
+		}
+		defer ws.Close()
+		res <- ws
+		<-res
+	}
 }

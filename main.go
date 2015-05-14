@@ -1,19 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
 	"runtime"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
-	"github.com/golang/glog"
-	"github.com/gorilla/websocket"
 )
 
 var (
@@ -58,80 +52,13 @@ func main() {
 	// peer from ONE client
 	one := router.Group("/one")
 	one.GET("/ctrl", fakeOneLogin(), handleWs(h, oneControlling))
-	one.GET("/signaling/:reciever", func(c *gin.Context) {
-		glog.Infoln("one signaling coming")
-		reciever := c.Params.ByName("reciever")
-		res, ok := h.sigResWaitMap[reciever]
-		if !ok {
-			glog.Errorln("No reciever here")
-			return
-		}
-		delete(h.sigResWaitMap, reciever)
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		defer ws.Close()
-		res <- ws
-		<-res
-	})
+	one.GET("/signaling/:reciever", oneSignaling(h))
 
 	// websocket
 	// peer from MANY client
 	many := router.Group("/many", fakeManyLogin())
 	many.GET("/ctrl", handleWs(h, manyControlling))
-	many.GET("/signaling/:room/:camera/:reciever", func(c *gin.Context) {
-		glog.Infoln("many signaling coming")
-		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
-		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "no room set"})
-			return
-		}
-		room, ok := h.rooms[roomId]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found in request"})
-			return
-		}
-		cameras := room.Cameras
-		if cameras == nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cameras not found in room"})
-			return
-		}
-		cmd := CreateSignalingConnectionCommand{
-			Name:     "CreateSignalingConnection",
-			Camera:   c.Params.ByName("camera"),
-			Reciever: c.Params.ByName("reciever"),
-		}
-		_, ok = cameras[cmd.Camera]
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Camera not found in room"})
-			return
-		}
-		cmdStr, err := json.Marshal(cmd)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		res := make(chan *websocket.Conn)
-		h.sigResWaitMap[cmd.Reciever] = res
-		room.SendCtrlToOne <- cmdStr
-		var resWs *websocket.Conn
-		select {
-		case resWs = <-res:
-		case <-time.After(time.Second * 15):
-			delete(h.sigResWaitMap, cmd.Reciever)
-			return
-		}
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		defer ws.Close()
-		Pipe(ws, resWs)
-		res <- nil
-	})
+	many.GET("/signaling/:room/:camera/:reciever", manySignaling(h))
 
 	router.Run(*addr)
 }

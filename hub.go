@@ -2,9 +2,16 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"sync"
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+)
+
+var (
+	RecieverNotFound   = errors.New("Reciever not found")
+	RecieverDuplicated = errors.New("Reciever duplicated")
 )
 
 type Hub struct {
@@ -16,6 +23,7 @@ type Hub struct {
 	join          chan *ManyControlConn
 	leave         chan *ManyControlConn
 	sigResWaitMap map[string]chan *websocket.Conn
+	sigResMutex   sync.Mutex
 }
 
 func New() *Hub {
@@ -28,6 +36,7 @@ func New() *Hub {
 		make(chan *ManyControlConn),
 		make(chan *ManyControlConn),
 		make(map[string]chan *websocket.Conn),
+		sync.Mutex{},
 	}
 }
 
@@ -83,8 +92,8 @@ func (h *Hub) onCmd(cmd *Command) {
 }
 
 func (h *Hub) onJoin(many *ManyControlConn) {
-	for _, roomId := range many.rooms {
-		room, ok := h.rooms[roomId]
+	for _, one := range many.Account.Ones {
+		room, ok := h.rooms[one.Id]
 		if !ok {
 			glog.Errorln("Room not found in command")
 			continue
@@ -94,8 +103,8 @@ func (h *Hub) onJoin(many *ManyControlConn) {
 }
 
 func (h *Hub) onLeave(many *ManyControlConn) {
-	for _, roomId := range many.rooms {
-		room, ok := h.rooms[roomId]
+	for _, one := range many.Account.Ones {
+		room, ok := h.rooms[one.Id]
 		if !ok {
 			glog.Errorln("Room not found in command")
 			return
@@ -106,8 +115,23 @@ func (h *Hub) onLeave(many *ManyControlConn) {
 	}
 }
 
-type CreateSignalingConnectionCommand struct {
-	Name     string `json:"name"`
-	Reciever string `json:"reciever"`
-	Camera   string `json:"camera"`
+func (h *Hub) AddReciever(reciever string) (chan *websocket.Conn, error) {
+	h.sigResMutex.Lock()
+	defer h.sigResMutex.Unlock()
+	if _, ok := h.sigResWaitMap[reciever]; ok {
+		return nil, RecieverDuplicated
+	}
+	resWait := make(chan *websocket.Conn)
+	h.sigResWaitMap[reciever] = resWait
+	return resWait, nil
+}
+
+func (h *Hub) RemoveReciever(reciever string) (chan *websocket.Conn, error) {
+	h.sigResMutex.Lock()
+	defer h.sigResMutex.Unlock()
+	if resWait, ok := h.sigResWaitMap[reciever]; ok {
+		delete(h.sigResWaitMap, reciever)
+		return resWait, nil
+	}
+	return nil, RecieverNotFound
 }

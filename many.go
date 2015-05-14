@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
@@ -16,8 +18,7 @@ const (
 type ManyControlConn struct {
 	*websocket.Conn
 	*Account
-	rooms []int64
-	send  chan []byte
+	send chan []byte
 }
 
 type CameraRoom struct {
@@ -31,25 +32,13 @@ type CameraList struct {
 	Rooms []CameraRoom `json:"rooms,omitempty"`
 }
 
-// send and refresh cameras to web client
-// TODO next add manage api
-func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
-	glog.Infoln("oneControlling start")
-	// one is set in prev handler
-	iuser, err := c.Get(GinKeyUser)
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	ones := iuser.(*Account).Ones
-	roomIds := make([]int64, len(ones))
+func (conn *ManyControlConn) SendCameraList(h *Hub) error {
 	list := CameraList{
 		Type:  "CameraList",
-		Rooms: make([]CameraRoom, len(ones)),
+		Rooms: make([]CameraRoom, len(conn.Account.Ones)),
 	}
-	for i, one := range ones {
+	for i, one := range conn.Account.Ones {
 		if room, ok := h.rooms[one.Id]; ok {
-			roomIds[i] = one.Id
 			list.Rooms[i] = CameraRoom{
 				Id:      one.Id,
 				Name:    one.Name,
@@ -62,12 +51,33 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 			}
 		}
 	}
+	cameraList, err := json.Marshal(list)
+	if err != nil {
+		return err
+	}
+	conn.send <- cameraList
+	return nil
+}
+
+// TODO next add manage api
+func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
+	glog.Infoln("oneControlling start")
+	// one is set in prev handler
+	iuser, err := c.Get(GinKeyUser)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	user, ok := iuser.(*Account)
+	if !ok {
+		glog.Errorln("Account error")
+		return
+	}
 
 	send := make(chan []byte, 64)
 	many := &ManyControlConn{
 		Conn:    ws,
-		Account: iuser.(*Account),
-		rooms:   roomIds,
+		Account: user,
 		send:    send,
 	}
 
@@ -76,12 +86,10 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 
 	go writingWithPing(ws, send)
 
-	cameraList, err := json.Marshal(list)
-	if err != nil {
+	if err = many.SendCameraList(h); err != nil {
 		glog.Errorln(err)
 		return
 	}
-	send <- cameraList
 
 	for {
 		_, b, err := ws.ReadMessage()
@@ -92,7 +100,7 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 		glog.Infoln("From many client:", string(b))
 		if !bytes.HasPrefix(b, []byte("many:")) {
 			glog.Errorln("Wrong message from many")
-			return
+			continue
 		}
 		raws := bytes.SplitN(b, []byte{':'}, 3)
 
@@ -125,4 +133,60 @@ func OnCommand(h *Hub, bcmd []byte) {
 		return
 	}
 	h.cmd <- cmd
+}
+
+type CreateSignalingConnectionCommand struct {
+	Name     string `json:"name"`
+	Reciever string `json:"reciever"`
+	Camera   string `json:"camera"`
+}
+
+func manySignaling(h *Hub) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		glog.Infoln("many signaling coming")
+		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
+		if err != nil {
+			panic("No room set in context")
+		}
+		room, ok := h.rooms[roomId]
+		if !ok {
+			panic("Room not found in request")
+		}
+		cameras := room.Cameras
+		if cameras == nil {
+			panic("Cameras not found in room")
+		}
+		cmd := CreateSignalingConnectionCommand{
+			Name:     "CreateSignalingConnection",
+			Camera:   c.Params.ByName("camera"),
+			Reciever: c.Params.ByName("reciever"),
+		}
+		_, ok = cameras[cmd.Camera]
+		if !ok {
+			panic("Camera not found in room")
+		}
+		cmdStr, err := json.Marshal(cmd)
+		if err != nil {
+			panic(err)
+		}
+		res, err := h.AddReciever(cmd.Reciever)
+		if err != nil {
+			panic(err)
+		}
+		room.SendCtrlToOne <- cmdStr
+		var resWs *websocket.Conn
+		select {
+		case resWs = <-res:
+		case <-time.After(time.Second * 15):
+			h.RemoveReciever(cmd.Reciever)
+			panic("Wait for one signaling timeout")
+		}
+		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		if err != nil {
+			panic(err)
+		}
+		defer ws.Close()
+		Pipe(ws, resWs)
+		res <- nil
+	}
 }
