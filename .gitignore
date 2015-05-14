@@ -23,5 +23,6 @@ _testmain.go
 *.test
 *.prof
 
+public
 ic-server-ws-signal
 *.zargo~

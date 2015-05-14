@@ -15,7 +15,6 @@ type Hub struct {
 	unreg         chan *ControlRoom
 	join          chan *ManyControlConn
 	leave         chan *ManyControlConn
-	sigReq        chan *NewSignalingConnParams
 	sigResWaitMap map[string]chan *websocket.Conn
 }
 
@@ -28,7 +27,6 @@ func New() *Hub {
 		make(chan *ControlRoom),
 		make(chan *ManyControlConn),
 		make(chan *ManyControlConn),
-		make(chan *NewSignalingConnParams),
 		make(map[string]chan *websocket.Conn),
 	}
 }
@@ -48,8 +46,6 @@ func (h *Hub) Run() {
 			h.onJoin(many)
 		case many := <-h.leave:
 			h.onLeave(many)
-		case sigReq := <-h.sigReq:
-			h.onSigReq(sigReq)
 		}
 	}
 }
@@ -114,32 +110,4 @@ type CreateSignalingConnectionCommand struct {
 	Name     string `json:"name"`
 	Reciever string `json:"reciever"`
 	Camera   string `json:"camera"`
-}
-
-func (h *Hub) onSigReq(params *NewSignalingConnParams) {
-	room, ok := h.rooms[params.Room]
-	if !ok {
-		glog.Errorln("Room not found in request")
-		return
-	}
-	cameras := room.Cameras
-	if cameras == nil {
-		glog.Errorln("Cameras not found in room")
-		return
-	}
-	_, ok = cameras[params.Camera]
-	if !ok {
-		glog.Errorln("Camera not found in room")
-		return
-	}
-	cmd, err := json.Marshal(&CreateSignalingConnectionCommand{
-		Name:     "CreateSignalingConnection",
-		Reciever: params.Reciever,
-		Camera:   params.Camera,
-	})
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	room.SendCtrlToOne <- cmd
 }

@@ -34,6 +34,7 @@ func NewControlRoom(one *One, send chan []byte) *ControlRoom {
 	return &ControlRoom{
 		One:           one,
 		SendCtrlToOne: send,
+		Participants:  make(map[int64]*ManyControlConn),
 	}
 }
 
@@ -54,6 +55,7 @@ func (room *ControlRoom) broadcast(h *Hub, msg *Message) {
 }
 
 func oneControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
+	glog.Infoln("oneControlling start")
 	// one is set in prev handler
 	ione, err := c.Get(GinKeyOne)
 	if err != nil {
@@ -72,12 +74,15 @@ func oneControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 
 	go writing(ws, send)
 
+	glog.Infoln("starting read from one ctrl")
+
 	for {
 		_, b, err := ws.ReadMessage()
 		if err != nil {
 			glog.Errorln(err)
 			return
 		}
+		glog.Infoln("From one client:", string(b))
 		if !bytes.HasPrefix(b, []byte("one:")) {
 			glog.Errorln("Wrong message from one")
 			return

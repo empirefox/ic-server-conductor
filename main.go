@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"runtime"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/contrib/secure"
@@ -27,20 +29,15 @@ func init() {
 	}
 	flag.Parse()
 	if isDevelopment {
-		*addr = "0.0.0.0:9998"
+		*addr = "0.0.0.0:9999"
 	}
-}
-
-type NewSignalingConnParams struct {
-	Room     int64  `json:"room"`
-	Camera   string `json:"camera"`
-	Reciever string `json:"reciever"`
 }
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
 	h := New()
+	go h.Run()
 
 	router := gin.Default()
 
@@ -60,8 +57,9 @@ func main() {
 	// websocket
 	// peer from ONE client
 	one := router.Group("/one")
-	one.GET("/ctrl", handleWs(h, oneControlling))
+	one.GET("/ctrl", fakeOneLogin(), handleWs(h, oneControlling))
 	one.GET("/signaling/:reciever", func(c *gin.Context) {
+		glog.Infoln("one signaling coming")
 		reciever := c.Params.ByName("reciever")
 		res, ok := h.sigResWaitMap[reciever]
 		if !ok {
@@ -81,18 +79,43 @@ func main() {
 
 	// websocket
 	// peer from MANY client
-	many := router.Group("/many")
-	many.POST("/ctrl", handleWs(h, manyControlling))
-	many.POST("/signaling", func(c *gin.Context) {
-		var params NewSignalingConnParams
-		if !c.Bind(&params) {
-			glog.Errorln("Cannot bind params")
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Cannot bind params"})
+	many := router.Group("/many", fakeManyLogin())
+	many.GET("/ctrl", handleWs(h, manyControlling))
+	many.GET("/signaling/:room/:camera/:reciever", func(c *gin.Context) {
+		glog.Infoln("many signaling coming")
+		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "no room set"})
+			return
+		}
+		room, ok := h.rooms[roomId]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Room not found in request"})
+			return
+		}
+		cameras := room.Cameras
+		if cameras == nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Cameras not found in room"})
+			return
+		}
+		cmd := CreateSignalingConnectionCommand{
+			Name:     "CreateSignalingConnection",
+			Camera:   c.Params.ByName("camera"),
+			Reciever: c.Params.ByName("reciever"),
+		}
+		_, ok = cameras[cmd.Camera]
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Camera not found in room"})
+			return
+		}
+		cmdStr, err := json.Marshal(cmd)
+		if err != nil {
+			glog.Errorln(err)
 			return
 		}
 		res := make(chan *websocket.Conn)
-		h.sigResWaitMap[params.Reciever] = res
-		h.sigReq <- &params
+		h.sigResWaitMap[cmd.Reciever] = res
+		room.SendCtrlToOne <- cmdStr
 		select {
 		case resWs := <-res:
 			ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
@@ -104,7 +127,7 @@ func main() {
 			Pipe(ws, resWs)
 			res <- nil
 		case <-time.After(time.Second * 15):
-			delete(h.sigResWaitMap, params.Reciever)
+			delete(h.sigResWaitMap, cmd.Reciever)
 			return
 		}
 	})

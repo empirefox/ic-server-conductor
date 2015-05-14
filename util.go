@@ -77,9 +77,10 @@ func writing(ws *websocket.Conn, send chan []byte) {
 				ws.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := ws.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+			if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
+			glog.Infoln("ws send ", string(msg))
 		}
 	}
 }
@@ -97,9 +98,10 @@ func writingWithPing(ws *websocket.Conn, send chan []byte) {
 				ws.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
-			if err := ws.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
+			if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
+			glog.Infoln("ws send ", string(msg))
 		case <-ticker.C:
 			if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 				return

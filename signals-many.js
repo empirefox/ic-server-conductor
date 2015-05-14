@@ -1,24 +1,21 @@
 // control conn<-----------
 var CameraList = {
     Type : "CameraList",
-    Rooms : {
-        "room1_id" : {
-            Name : "room1",
-            SecretAddress : "room1-secret-addr",
-            Cameras : {
-                camera1_id : {
-                    Name : "camera1",
-                    Off : false,
-                    Online : true
-                },
-                camera2_id : {
-                    Name : "camera2",
-                    Off : false,
-                    Online : true
-                }
-            }
-        }
-    }
+    Rooms : [{
+        id : 12,
+        Name : "room1",
+        Cameras : [{
+            id : "camera1_id",
+            Name : "camera1",
+            Off : false,
+            Online : true
+        }, {
+            id : "camera2_id",
+            Name : "camera2",
+            Off : false,
+            Online : true
+        }]
+    }]
 };
 
 // signaling conn--------------->

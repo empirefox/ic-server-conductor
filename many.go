@@ -20,9 +20,21 @@ type ManyControlConn struct {
 	send  chan []byte
 }
 
+type CameraRoom struct {
+	Id      int64   `json:"id,omitempty"`
+	Name    string  `json:"name,omitempty"`
+	Cameras []Ipcam `json:"cameras,omitempty"`
+}
+
+type CameraList struct {
+	Type  string       `json:"type,omitempty"`
+	Rooms []CameraRoom `json:"rooms,omitempty"`
+}
+
 // send and refresh cameras to web client
 // TODO next add manage api
 func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
+	glog.Infoln("oneControlling start")
 	// one is set in prev handler
 	iuser, err := c.Get(GinKeyUser)
 	if err != nil {
@@ -31,11 +43,23 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 	}
 	ones := iuser.(*Account).Ones
 	roomIds := make([]int64, len(ones))
-	rooms := make(map[int64]Ipcams)
+	list := CameraList{
+		Type:  "CameraList",
+		Rooms: make([]CameraRoom, len(ones)),
+	}
 	for i, one := range ones {
 		if room, ok := h.rooms[one.Id]; ok {
 			roomIds[i] = one.Id
-			rooms[one.Id] = room.Cameras
+			list.Rooms[i] = CameraRoom{
+				Id:      one.Id,
+				Name:    one.Name,
+				Cameras: make([]Ipcam, len(room.Cameras)),
+			}
+			j := 0
+			for _, ipcam := range room.Cameras {
+				list.Rooms[i].Cameras[j] = ipcam
+				j++
+			}
 		}
 	}
 
@@ -52,10 +76,7 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 
 	go writingWithPing(ws, send)
 
-	cameraList, err := json.Marshal(gin.H{
-		"type":  "CameraList",
-		"rooms": rooms,
-	})
+	cameraList, err := json.Marshal(list)
 	if err != nil {
 		glog.Errorln(err)
 		return
@@ -69,6 +90,7 @@ func manyControlling(ws *websocket.Conn, c *gin.Context, h *Hub) {
 			glog.Errorln(err)
 			return
 		}
+		glog.Infoln("From many client:", string(b))
 		if !bytes.HasPrefix(b, []byte("many:")) {
 			glog.Errorln("Wrong message from many")
 			return
