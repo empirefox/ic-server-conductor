@@ -1,14 +1,14 @@
 package main
 
 type Message struct {
-	To      string `json:"to,omitempty"`
-	Room    int64  `json:"from,omitempty"`
+	From    string `json:"from,omitempty"`
+	Room    uint   `json:"to,omitempty"`
 	Content string `json:"content,omitempty"`
 }
 
 type Command struct {
 	Name       string `json:"name,omitempty"`
-	Room       int64  `json:"room,omitempty"`
+	Room       uint   `json:"room,omitempty"`
 	RoomName   string `json:"room_name,omitempty"`
 	Camera     string `json:"camera,omitempty"`
 	CameraName string `json:"camera_name,omitempty"`
@@ -16,14 +16,14 @@ type Command struct {
 }
 
 // Message Pool
-var messagePool = make(chan *Message, 100)
+var messagePool = make(chan *Message, 128)
 
 func EmptyMessage() (msg *Message) {
 	select {
 	case msg = <-messagePool:
 		// Got one from the pool.
-		msg.To = ""
-		msg.Room = int64(-1)
+		msg.From = ""
+		msg.Room = 0
 		msg.Content = ""
 	default:
 		msg = new(Message)
@@ -41,13 +41,13 @@ func (m *Message) Free() {
 }
 
 // Command Pool
-var commandPool = make(chan *Command, 100)
+var commandPool = make(chan *Command, 128)
 
 func EmptyCommand() (c *Command) {
 	select {
 	case c = <-commandPool:
 		c.Name = ""
-		c.Room = int64(-1)
+		c.Room = 0
 		c.RoomName = ""
 		c.Camera = ""
 		c.CameraName = ""

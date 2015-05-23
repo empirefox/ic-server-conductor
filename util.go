@@ -2,11 +2,10 @@ package main
 
 import (
 	"crypto/tls"
+	"encoding/json"
 	"os"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
 
@@ -35,8 +34,6 @@ var (
 	}
 )
 
-type WsHandler func(ws *websocket.Conn, c *gin.Context, h *Hub)
-
 func isProduction() bool {
 	for envName, values := range paasVendors {
 		if actual := os.Getenv(envName); values[actual] {
@@ -54,58 +51,7 @@ func getEnv(key, defaultValue string) string {
 	return defaultValue
 }
 
-func handleWs(h *Hub, handler WsHandler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		defer ws.Close()
-		handler(ws, c, h)
-	}
-}
-
-func writing(ws *websocket.Conn, send chan []byte) {
-	defer func() {
-		ws.Close()
-	}()
-	for {
-		select {
-		case msg, ok := <-send:
-			if !ok {
-				ws.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-			if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
-			glog.Infoln("ws send ", string(msg))
-		}
-	}
-}
-
-func writingWithPing(ws *websocket.Conn, send chan []byte) {
-	ticker := time.NewTicker(pingPeriod)
-	defer func() {
-		ticker.Stop()
-		ws.Close()
-	}()
-	for {
-		select {
-		case msg, ok := <-send:
-			if !ok {
-				ws.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-			if err := ws.WriteMessage(websocket.TextMessage, msg); err != nil {
-				return
-			}
-			glog.Infoln("ws send ", string(msg))
-		case <-ticker.C:
-			if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
-				return
-			}
-		}
-	}
+func GetTypedMsg(t string, m interface{}) ([]byte, error) {
+	msg := map[string]interface{}{"type": t, "content": m}
+	return json.Marshal(msg)
 }

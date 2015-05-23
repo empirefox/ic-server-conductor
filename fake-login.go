@@ -6,34 +6,36 @@ import (
 )
 
 func newFakeAccount() Account {
-	return Account{
-		Id:   20,
-		Name: "管理员",
-		Ones: []One{
-			{
-				Id:   100,
-				Name: "监控室1",
-			},
-		},
+	a := Account{
+		Ones: []One{newFakeOne()},
 	}
+	a.ID = 20
+	a.Name = "管理员"
+	return a
+}
+
+func newFakeOne() One {
+	one := One{
+		Owner: newFakeAccount(),
+	}
+	one.ID = 100
+	one.Name = "监控室1"
+	return one
 }
 
 func fakeOneLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		one := &One{
-			Id:    100,
-			Name:  "监控室1",
-			Owner: newFakeAccount(),
-		}
-		c.Set(GinKeyOne, one)
+		one := newFakeOne()
+		c.Set(GinKeyOne, &one)
 		glog.Infoln("Fake one login ok")
 	}
 }
 
 func fakeManyLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		a := newFakeAccount()
-		c.Set(GinKeyUser, &a)
+		c.Set(GinKeyUser, &Oauth{
+			Account: newFakeAccount(),
+		})
 		glog.Infoln("Fake many login ok")
 	}
 }

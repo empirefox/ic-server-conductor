@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"runtime"
 
+	"test.com/empirefox/gin-oauth2"
+
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
@@ -33,6 +35,8 @@ func main() {
 	h := New()
 	go h.Run()
 
+	conf, oauthBs := NewGoauthConf()
+
 	router := gin.Default()
 
 	router.Use(secure.Secure(secure.Options{
@@ -41,24 +45,27 @@ func main() {
 		IsDevelopment:   isDevelopment,
 	}))
 
-	// html
 	// peer from MANY client
 	router.Use(static.Serve("/", static.LocalFile("./public", false)))
 
-	//	router.GET("/auth/login", Login)
-	//	router.GET("/auth/logout", Logout)
+	// login page will be find in static serve
+	// logout will proccess some logic
+	router.GET(conf.PathLogout, conf.DefaultLogout)
+	router.GET("/auth/oauths", func(c *gin.Context) {
+		c.Writer.Write(oauthBs)
+	})
 
-	// websocket
 	// peer from ONE client
 	one := router.Group("/one")
-	one.GET("/ctrl", fakeOneLogin(), handleWs(h, oneControlling))
-	one.GET("/signaling/:reciever", oneSignaling(h))
+	one.GET("/ctrl", HandleOneCtrl(h))
+	one.GET("/signaling/:reciever", HandleOneSignaling(h))
 
 	// websocket
 	// peer from MANY client
-	many := router.Group("/many", fakeManyLogin())
-	many.GET("/ctrl", handleWs(h, manyControlling))
-	many.GET("/signaling/:room/:camera/:reciever", manySignaling(h))
+	many := router.Group("/many")
+	many.Use(goauth.Setup(conf))
+	many.GET("/ctrl", HandleManyCtrl(h))
+	many.GET("/signaling/:room/:camera/:reciever", HandleManySignaling(h))
 
 	router.Run(*addr)
 }

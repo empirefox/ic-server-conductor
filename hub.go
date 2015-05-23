@@ -15,7 +15,7 @@ var (
 )
 
 type Hub struct {
-	rooms         map[int64]*ControlRoom
+	rooms         map[uint]*ControlRoom
 	msg           chan *Message
 	cmd           chan *Command
 	reg           chan *ControlRoom
@@ -28,7 +28,7 @@ type Hub struct {
 
 func New() *Hub {
 	return &Hub{
-		make(map[int64]*ControlRoom),
+		make(map[uint]*ControlRoom),
 		make(chan *Message),
 		make(chan *Command),
 		make(chan *ControlRoom),
@@ -60,18 +60,18 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) onReg(room *ControlRoom) {
-	h.rooms[room.Id] = room
+	h.rooms[room.ID] = room
 }
 
 func (h *Hub) onUnreg(room *ControlRoom) {
-	if room, ok := h.rooms[room.Id]; ok {
-		delete(h.rooms, room.Id)
+	if room, ok := h.rooms[room.ID]; ok {
+		delete(h.rooms, room.ID)
 	}
 }
 
 func (h *Hub) onMsg(msg *Message) {
 	if room, ok := h.rooms[msg.Room]; ok {
-		room.broadcast(h, msg)
+		room.Broadcast(msg)
 	}
 	msg.Free()
 }
@@ -87,30 +87,30 @@ func (h *Hub) onCmd(cmd *Command) {
 		glog.Errorln(err)
 		return
 	}
-	room.SendCtrlToOne <- cmdStr
+	room.Send <- cmdStr
 	cmd.Free()
 }
 
 func (h *Hub) onJoin(many *ManyControlConn) {
 	for _, one := range many.Account.Ones {
-		room, ok := h.rooms[one.Id]
+		room, ok := h.rooms[one.ID]
 		if !ok {
 			glog.Errorln("Room not found in command")
 			continue
 		}
-		room.Participants[many.Id] = many
+		room.Participants[many.ID] = many
 	}
 }
 
 func (h *Hub) onLeave(many *ManyControlConn) {
 	for _, one := range many.Account.Ones {
-		room, ok := h.rooms[one.Id]
+		room, ok := h.rooms[one.ID]
 		if !ok {
 			glog.Errorln("Room not found in command")
 			return
 		}
-		if _, ok := room.Participants[many.Id]; ok {
-			delete(room.Participants, many.Id)
+		if _, ok := room.Participants[many.ID]; ok {
+			delete(room.Participants, many.ID)
 		}
 	}
 }
