@@ -59,9 +59,9 @@ type CameraList struct {
 func (conn *ManyControlConn) SendCameraList() error {
 	list := CameraList{
 		Type:  "CameraList",
-		Rooms: make([]CameraRoom, len(conn.Oauth.Account.Ones)),
+		Rooms: make([]CameraRoom, len(conn.Account.Ones)),
 	}
-	for i, one := range conn.Oauth.Account.Ones {
+	for i, one := range conn.Account.Ones {
 		if room, ok := conn.Hub.rooms[one.ID]; ok {
 			list.Rooms[i] = CameraRoom{
 				Id:      one.ID,
