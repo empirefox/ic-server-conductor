@@ -1,4 +1,4 @@
-package main
+package connections
 
 import (
 	"bytes"
@@ -9,6 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+
+	. "github.com/empirefox/ic-server-ws-signal/account"
+	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 const (
@@ -16,24 +19,24 @@ const (
 )
 
 type ManyControlConn struct {
-	*websocket.Conn
+	Connection
 	*Oauth
 	Send chan []byte
 	Hub  *Hub
 }
 
-func NewManyControlConn(h *Hub, ws *websocket.Conn) *ManyControlConn {
+func newManyControlConn(h *Hub, ws *websocket.Conn) *ManyControlConn {
 	return &ManyControlConn{
-		Conn: ws,
-		Hub:  h,
-		Send: make(chan []byte, 64),
+		Connection: ws,
+		Hub:        h,
+		Send:       make(chan []byte, 64),
 	}
 }
 
-func (conn *ManyControlConn) GetOauth(c *gin.Context) bool {
+func (conn *ManyControlConn) getOauth(c *gin.Context) bool {
 	iuser, err := c.Get(GinKeyUser)
 	if err != nil {
-		glog.Errorln(err)
+		glog.Infoln(err)
 		return false
 	}
 	user, ok := iuser.(*Oauth)
@@ -56,23 +59,24 @@ type CameraList struct {
 	Rooms []CameraRoom `json:"rooms,omitempty"`
 }
 
-func (conn *ManyControlConn) SendCameraList() error {
+func (conn *ManyControlConn) sendCameraList() error {
 	list := CameraList{
 		Type:  "CameraList",
-		Rooms: make([]CameraRoom, len(conn.Account.Ones)),
+		Rooms: make([]CameraRoom, 0, len(conn.Account.Ones)),
 	}
-	for i, one := range conn.Account.Ones {
+	for _, one := range conn.Account.Ones {
 		if room, ok := conn.Hub.rooms[one.ID]; ok {
-			list.Rooms[i] = CameraRoom{
+			r := CameraRoom{
 				Id:      one.ID,
 				Name:    one.Name,
-				Cameras: make([]Ipcam, len(room.Cameras)),
+				Cameras: make([]Ipcam, 0, len(room.Cameras)),
 			}
 			j := 0
 			for _, ipcam := range room.Cameras {
-				list.Rooms[i].Cameras[j] = ipcam
+				r.Cameras[j] = ipcam
 				j++
 			}
+			list.Rooms = append(list.Rooms, r)
 		}
 	}
 	cameraList, err := json.Marshal(list)
@@ -84,8 +88,8 @@ func (conn *ManyControlConn) SendCameraList() error {
 }
 
 // with ping
-func (conn *ManyControlConn) WritePump() {
-	ticker := time.NewTicker(pingPeriod)
+func (conn *ManyControlConn) writePump() {
+	ticker := time.NewTicker(PingPeriod)
 	defer func() {
 		ticker.Stop()
 		conn.Close()
@@ -109,7 +113,7 @@ func (conn *ManyControlConn) WritePump() {
 	}
 }
 
-func (conn *ManyControlConn) ReadPump() {
+func (conn *ManyControlConn) readPump() {
 	for {
 		_, b, err := conn.ReadMessage()
 		if err != nil {
@@ -126,11 +130,11 @@ func (conn *ManyControlConn) ReadPump() {
 
 		switch string(raws[1]) {
 		case "Chat":
-			OnManyChat(conn, raws[2])
+			onManyChat(conn, raws[2])
 		case "Command":
-			OnManyCommand(conn, raws[2])
+			onManyCommand(conn, raws[2])
 		case "GetManyData":
-			OnManyGetData(conn, raws[2])
+			onManyGetData(conn, raws[2])
 		default:
 			glog.Errorln("Unknow command json:", string(b))
 		}
@@ -139,34 +143,34 @@ func (conn *ManyControlConn) ReadPump() {
 
 func HandleManyCtrl(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Errorln(err)
 			return
 		}
 		defer ws.Close()
-		conn := NewManyControlConn(h, ws)
-		if !conn.GetOauth(c) {
+		conn := newManyControlConn(h, ws)
+		if !conn.getOauth(c) {
 			return
 		}
-		onManyCtrl(conn)
+		handleManyCtrl(conn)
 	}
 }
 
 // TODO next add manage api
-func onManyCtrl(conn *ManyControlConn) {
+func handleManyCtrl(conn *ManyControlConn) {
 	glog.Infoln("oneControlling start")
 
 	conn.Hub.join <- conn
 	defer func() { conn.Hub.leave <- conn }()
 
-	go conn.WritePump()
-	conn.ReadPump()
+	go conn.writePump()
+	conn.readPump()
 }
 
 // on many control message
 
-func OnManyChat(many *ManyControlConn, bmsg []byte) {
+func onManyChat(many *ManyControlConn, bmsg []byte) {
 	msg := EmptyMessage()
 	if err := json.Unmarshal(bmsg, msg); err != nil {
 		glog.Errorln(err)
@@ -177,7 +181,7 @@ func OnManyChat(many *ManyControlConn, bmsg []byte) {
 	many.Hub.msg <- msg
 }
 
-func OnManyCommand(many *ManyControlConn, bcmd []byte) {
+func onManyCommand(many *ManyControlConn, bcmd []byte) {
 	cmd := EmptyCommand()
 	if err := json.Unmarshal(bcmd, cmd); err != nil {
 		glog.Errorln(err)
@@ -187,7 +191,7 @@ func OnManyCommand(many *ManyControlConn, bcmd []byte) {
 	many.Hub.cmd <- cmd
 }
 
-func OnManyGetData(many *ManyControlConn, name []byte) {
+func onManyGetData(many *ManyControlConn, name []byte) {
 	switch string(name) {
 	case "Username":
 		msg, err := GetTypedMsg(string(name), many.Account.Name)
@@ -197,7 +201,7 @@ func OnManyGetData(many *ManyControlConn, name []byte) {
 		}
 		many.Send <- msg
 	case "CameraList":
-		many.SendCameraList()
+		many.sendCameraList()
 	default:
 		glog.Errorln("Unknow GetManyData name:", string(name))
 	}
@@ -214,44 +218,15 @@ type CreateSignalingConnectionCommand struct {
 func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glog.Infoln("many signaling coming")
-		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
-		if err != nil {
-			panic("No room set in context")
-		}
-		room, ok := h.rooms[uint(roomId)]
-		if !ok {
-			panic("Room not found in request")
-		}
-		cameras := room.Cameras
-		if cameras == nil {
-			panic("Cameras not found in room")
-		}
-		cmd := CreateSignalingConnectionCommand{
-			Name:     "CreateSignalingConnection",
-			Camera:   c.Params.ByName("camera"),
-			Reciever: c.Params.ByName("reciever"),
-		}
-		_, ok = cameras[cmd.Camera]
-		if !ok {
-			panic("Camera not found in room")
-		}
-		cmdStr, err := json.Marshal(cmd)
-		if err != nil {
-			panic(err)
-		}
-		res, err := h.AddReciever(cmd.Reciever)
-		if err != nil {
-			panic(err)
-		}
-		room.Send <- cmdStr
+		res, reciever := preProccessSignaling(h, c)
 		var resWs *websocket.Conn
 		select {
 		case resWs = <-res:
 		case <-time.After(time.Second * 15):
-			h.RemoveReciever(cmd.Reciever)
+			h.processFromWait(reciever)
 			panic("Wait for one signaling timeout")
 		}
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			panic(err)
 		}
@@ -259,4 +234,38 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 		Pipe(ws, resWs)
 		res <- nil
 	}
+}
+
+func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, reciever string) {
+	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
+	if err != nil {
+		panic("No room set in context")
+	}
+	room, ok := h.rooms[uint(roomId)]
+	if !ok {
+		panic("Room not found in request")
+	}
+	cameras := room.Cameras
+	if cameras == nil {
+		panic("Cameras not found in room")
+	}
+	cmd := CreateSignalingConnectionCommand{
+		Name:     "CreateSignalingConnection",
+		Camera:   c.Params.ByName("camera"),
+		Reciever: c.Params.ByName("reciever"),
+	}
+	_, ok = cameras[cmd.Camera]
+	if !ok {
+		panic("Camera not found in room")
+	}
+	cmdStr, err := json.Marshal(cmd)
+	if err != nil {
+		panic(err)
+	}
+	res, err = h.waitForProcess(cmd.Reciever)
+	if err != nil {
+		panic(err)
+	}
+	room.Send <- cmdStr
+	return res, cmd.Reciever
 }

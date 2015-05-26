@@ -1,4 +1,4 @@
-package main
+package account
 
 import (
 	"encoding/json"
@@ -51,19 +51,22 @@ type PageOauth struct {
 	Css  string `json:"css,omitempty"`
 }
 
-func NewGoauthConf() (*Config, []byte) {
+func findProviders() (map[string]Provider, []PageOauth) {
 	var ops []OauthProvider
-	if err := DB.Where(map[string]interface{}{"enabled": true}).Find(&ops).Error; err != nil {
+	if err := aservice.FindOauthProviders(&ops); err != nil {
 		glog.Errorln(err)
 	}
 	ps := make(map[string]Provider, len(ops))
-	pos := make([]PageOauth, len(ops))
+	pos := make([]PageOauth, 0, len(ops))
 	for _, op := range ops {
-		if op.Enabled {
-			ps[op.Path] = op.ConfigProvider()
-			pos = append(pos, PageOauth{op.Path, op.Name, op.Css})
-		}
+		ps[op.Path] = op.ConfigProvider()
+		pos = append(pos, PageOauth{op.Path, op.Name, op.Css})
 	}
+	return ps, pos
+}
+
+func NewGoauthConf() (*Config, []byte) {
+	ps, pos := findProviders()
 	config := &Config{
 		Providers: ps,
 		NewUserFunc: func() OauthUser {

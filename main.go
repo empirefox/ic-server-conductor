@@ -5,18 +5,21 @@ import (
 	"fmt"
 	"runtime"
 
-	"test.com/empirefox/gin-oauth2"
-
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
+
+	"github.com/empirefox/ic-server-ws-signal/account"
+	. "github.com/empirefox/ic-server-ws-signal/connections"
+	"github.com/empirefox/ic-server-ws-signal/utils"
+	"test.com/empirefox/gin-oauth2"
 )
 
 var (
 	// set in cmd flag
-	addr          = flag.String("addr", fmt.Sprintf(":%v", getEnv("PORT", "8080")), "http service address")
+	addr          = flag.String("addr", fmt.Sprintf(":%v", utils.GetEnv("PORT", "8080")), "http service address")
 	names         []string
-	isDevelopment = !isProduction()
+	isDevelopment = !utils.IsProduction()
 )
 
 func init() {
@@ -32,10 +35,10 @@ func init() {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	h := New()
+	h := NewHub()
 	go h.Run()
 
-	conf, oauthBs := NewGoauthConf()
+	conf, oauthBs := account.NewGoauthConf()
 
 	router := gin.Default()
 

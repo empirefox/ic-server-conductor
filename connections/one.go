@@ -1,4 +1,4 @@
-package main
+package connections
 
 import (
 	"bytes"
@@ -7,6 +7,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+
+	. "github.com/empirefox/ic-server-ws-signal/account"
+	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 const (
@@ -24,7 +27,7 @@ type Ipcam struct {
 type Ipcams map[string]Ipcam
 
 type ControlRoom struct {
-	*websocket.Conn
+	Connection
 	*One
 	Cameras      Ipcams
 	Participants map[uint]*ManyControlConn
@@ -32,9 +35,9 @@ type ControlRoom struct {
 	Hub          *Hub
 }
 
-func NewControlRoom(h *Hub, ws *websocket.Conn) *ControlRoom {
+func newControlRoom(h *Hub, ws *websocket.Conn) *ControlRoom {
 	return &ControlRoom{
-		Conn:         ws,
+		Connection:   ws,
 		Hub:          h,
 		Cameras:      make(Ipcams),
 		Send:         make(chan []byte, 64),
@@ -42,15 +45,10 @@ func NewControlRoom(h *Hub, ws *websocket.Conn) *ControlRoom {
 	}
 }
 
-func (room *ControlRoom) Broadcast(msg *Message) {
-	msgStr, err := GetTypedMsg("ChatMsg", msg)
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
+func (room *ControlRoom) broadcast(msg []byte) {
 	for _, ctrl := range room.Participants {
 		select {
-		case ctrl.Send <- msgStr:
+		case ctrl.Send <- msg:
 		default:
 			room.Close()
 			room.Hub.onLeave(ctrl)
@@ -59,7 +57,7 @@ func (room *ControlRoom) Broadcast(msg *Message) {
 }
 
 // no ping
-func (room *ControlRoom) WritePump() {
+func (room *ControlRoom) writePump() {
 	defer func() {
 		room.Close()
 	}()
@@ -78,7 +76,7 @@ func (room *ControlRoom) WritePump() {
 	}
 }
 
-func (room *ControlRoom) ReadPump() {
+func (room *ControlRoom) readPump() {
 	for {
 		_, b, err := room.ReadMessage()
 		if err != nil {
@@ -94,14 +92,14 @@ func (room *ControlRoom) ReadPump() {
 
 		switch string(raws[1]) {
 		case "IpcamsInfo":
-			OnIpcamsInfo(room, raws[2])
+			onOneIpcamsInfo(room, raws[2])
 		default:
 			glog.Errorln("Unknow command json:", string(b))
 		}
 	}
 }
 
-func (room *ControlRoom) WaitLogin() (ok bool) {
+func (room *ControlRoom) waitLogin() (ok bool) {
 	_, addrb, err := room.ReadMessage()
 	if err != nil {
 		glog.Errorln(err)
@@ -111,8 +109,8 @@ func (room *ControlRoom) WaitLogin() (ok bool) {
 		glog.Errorln("Wrong addr from one")
 		return
 	}
-	one, err := FindOne(addrb[5:])
-	if err != nil {
+	one := &One{}
+	if err = one.Find(addrb[5:]); err != nil {
 		glog.Errorln(err)
 		return
 	}
@@ -123,30 +121,30 @@ func (room *ControlRoom) WaitLogin() (ok bool) {
 
 func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Errorln(err)
 			return
 		}
 		defer ws.Close()
-		onOneCtrl(NewControlRoom(h, ws))
+		handleOneCtrl(newControlRoom(h, ws))
 	}
 }
 
-func onOneCtrl(room *ControlRoom) {
+func handleOneCtrl(room *ControlRoom) {
 	glog.Infoln("oneControlling start")
-	if !room.WaitLogin() {
+	if !room.waitLogin() {
 		return
 	}
 
 	room.Hub.reg <- room
 	defer func() { room.Hub.unreg <- room }()
 
-	go room.WritePump()
-	room.ReadPump()
+	go room.writePump()
+	room.readPump()
 }
 
-func OnIpcamsInfo(room *ControlRoom, info []byte) {
+func onOneIpcamsInfo(room *ControlRoom, info []byte) {
 	var ipcams Ipcams
 	if err := json.Unmarshal(info, &ipcams); err != nil {
 		glog.Errorln(err)
@@ -158,11 +156,11 @@ func OnIpcamsInfo(room *ControlRoom, info []byte) {
 func HandleOneSignaling(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glog.Infoln("one response signaling coming")
-		res, err := h.RemoveReciever(c.Params.ByName("reciever"))
+		res, err := h.processFromWait(c.Params.ByName("reciever"))
 		if err != nil {
 			panic(err)
 		}
-		ws, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			panic(err)
 		}

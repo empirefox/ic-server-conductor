@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"crypto/tls"
@@ -11,10 +11,10 @@ import (
 
 const (
 	// Time allowed to write a message to the peer.
-	writeWait = 10 * time.Second
+	WriteWait = 10 * time.Second
 
 	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = 30 * time.Second
+	PingPeriod = 30 * time.Second
 )
 
 var (
@@ -24,17 +24,17 @@ var (
 		},
 	}
 
-	upgrader = websocket.Upgrader{
+	Upgrader = websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
 	}
 
-	dailer = websocket.Dialer{
+	Dailer = websocket.Dialer{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 )
 
-func isProduction() bool {
+func IsProduction() bool {
 	for envName, values := range paasVendors {
 		if actual := os.Getenv(envName); values[actual] {
 			return true
@@ -43,7 +43,7 @@ func isProduction() bool {
 	return false
 }
 
-func getEnv(key, defaultValue string) string {
+func GetEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value != "" {
 		return value

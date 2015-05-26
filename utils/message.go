@@ -1,4 +1,4 @@
-package main
+package utils
 
 type Message struct {
 	From    string `json:"from,omitempty"`

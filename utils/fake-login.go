@@ -1,8 +1,10 @@
-package main
+package utils
 
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
+
+	. "github.com/empirefox/ic-server-ws-signal/account"
 )
 
 func newFakeAccount() Account {
@@ -23,17 +25,17 @@ func newFakeOne() One {
 	return one
 }
 
-func fakeOneLogin() gin.HandlerFunc {
+func FakeOneLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		one := newFakeOne()
-		c.Set(GinKeyOne, &one)
+		c.Set("one", &one)
 		glog.Infoln("Fake one login ok")
 	}
 }
 
-func fakeManyLogin() gin.HandlerFunc {
+func FakeManyLogin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Set(GinKeyUser, &Oauth{
+		c.Set("user", &Oauth{
 			Account: newFakeAccount(),
 		})
 		glog.Infoln("Fake many login ok")

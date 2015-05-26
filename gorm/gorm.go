@@ -1,16 +1,16 @@
 //GORM_DIALECT=mysql DB_URL="gorm:gorm@/gorm?charset=utf8&parseTime=True"
-//GORM_DIALECT=postgres DB_URL="user=gorm dbname=gorm sslmode=disable" PORT=8080 goconvey
-//GORM_DIALECT=sqlite3 DB_URL=/tmp/gorm.DB go testpackage db
-package main
+//GORM_DIALECT=postgres DB_URL="postgres://postgres:6Vno3r3gH9sZHSxo@localhost/ic_signal_test?sslmode=disable"
+//GORM_DIALECT=sqlite3 DB_URL=/tmp/gorm.DB
+package gorm
 
 import (
 	"fmt"
 	"os"
 
-	_ "github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
+	//	_ "github.com/lib/pq"
+	//	_ "github.com/go-sql-driver/mysql"
+	//	_ "github.com/mattn/go-sqlite3"
 )
 
 var (
@@ -18,6 +18,10 @@ var (
 )
 
 func init() {
+	if os.Getenv("TEST_NO_DB") == "true" {
+		return
+	}
+
 	var err error
 	vendor := os.Getenv("GORM_DIALECT")
 	url := os.Getenv("DB_URL")

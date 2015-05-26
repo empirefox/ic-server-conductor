@@ -1,4 +1,4 @@
-package main
+package connections
 
 import (
 	"encoding/json"
@@ -7,6 +7,8 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
+
+	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 var (
@@ -26,7 +28,7 @@ type Hub struct {
 	sigResMutex   sync.Mutex
 }
 
-func New() *Hub {
+func NewHub() *Hub {
 	return &Hub{
 		make(map[uint]*ControlRoom),
 		make(chan *Message),
@@ -70,13 +72,19 @@ func (h *Hub) onUnreg(room *ControlRoom) {
 }
 
 func (h *Hub) onMsg(msg *Message) {
-	if room, ok := h.rooms[msg.Room]; ok {
-		room.Broadcast(msg)
+	defer msg.Free()
+	msgStr, err := GetTypedMsg("ChatMsg", msg)
+	if err != nil {
+		glog.Errorln(err)
+		return
 	}
-	msg.Free()
+	if room, ok := h.rooms[msg.Room]; ok {
+		room.broadcast(msgStr)
+	}
 }
 
 func (h *Hub) onCmd(cmd *Command) {
+	defer cmd.Free()
 	room, ok := h.rooms[cmd.Room]
 	if !ok {
 		glog.Errorln("Room not found in command")
@@ -88,7 +96,6 @@ func (h *Hub) onCmd(cmd *Command) {
 		return
 	}
 	room.Send <- cmdStr
-	cmd.Free()
 }
 
 func (h *Hub) onJoin(many *ManyControlConn) {
@@ -115,7 +122,7 @@ func (h *Hub) onLeave(many *ManyControlConn) {
 	}
 }
 
-func (h *Hub) AddReciever(reciever string) (chan *websocket.Conn, error) {
+func (h *Hub) waitForProcess(reciever string) (chan *websocket.Conn, error) {
 	h.sigResMutex.Lock()
 	defer h.sigResMutex.Unlock()
 	if _, ok := h.sigResWaitMap[reciever]; ok {
@@ -126,7 +133,7 @@ func (h *Hub) AddReciever(reciever string) (chan *websocket.Conn, error) {
 	return resWait, nil
 }
 
-func (h *Hub) RemoveReciever(reciever string) (chan *websocket.Conn, error) {
+func (h *Hub) processFromWait(reciever string) (chan *websocket.Conn, error) {
 	h.sigResMutex.Lock()
 	defer h.sigResMutex.Unlock()
 	if resWait, ok := h.sigResWaitMap[reciever]; ok {

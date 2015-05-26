@@ -1,12 +1,15 @@
 //GORM_DIALECT=mysql DB_URL="gorm:gorm@/gorm?charset=utf8&parseTime=True"
 //GORM_DIALECT=postgres DB_URL="postgres://postgres:6Vno3r3gH9sZHSxo@localhost/ic_signal_test?sslmode=disable"
 //GORM_DIALECT=sqlite3 DB_URL=/tmp/gorm.DB go test
-package main
+package account
 
 import (
 	"testing"
 
+	_ "github.com/lib/pq"
 	. "github.com/smartystreets/goconvey/convey"
+
+	. "github.com/empirefox/ic-server-ws-signal/gorm"
 )
 
 func init() {
@@ -14,23 +17,8 @@ func init() {
 }
 
 func recoveryAccount() {
-	ao := &AccountOne{}
-	one := &One{}
-	oauth := &Oauth{}
-
-	DB.DropTableIfExists(ao)
-	DB.DropTableIfExists(oauth)
-	DB.DropTableIfExists(one)
-	DB.DropTableIfExists(&Account{})
-
-	DB.CreateTable(ao)
-	DB.CreateTable(&Account{})
-	DB.CreateTable(one)
-	DB.CreateTable(oauth)
-
-	ao.AddForeignKey()
-	one.AddForeignKey()
-	oauth.AddForeignKey()
+	aservice.DropTables()
+	aservice.CreateTables()
 }
 
 func TestOauth_OnOid(t *testing.T) {
@@ -50,15 +38,18 @@ func TestOauth_OnOid(t *testing.T) {
 		})
 		Convey("should find Oauth with full Account", func() {
 			var o Oauth
-			err := o.OnOid("L2m", "oauth-oid")
+			err := o.OnOid("L2m", "oauth-oid2")
 			So(err, ShouldBeNil)
-			So(o.Account.Name, ShouldEqual, "L2moauth-oid")
+			So(o.Account.Name, ShouldEqual, "L2moauth-oid2")
 			So(len(o.Account.Ones), ShouldEqual, 0)
 
 			var o2 Oauth
-			err = o2.OnOid("L2m", "oauth-oid")
+			err = o2.OnOid("L2m", "oauth-oid2")
 			So(err, ShouldBeNil)
-			So(o2, ShouldResemble, o)
+			So(o2.ID, ShouldEqual, o.ID)
+			So(o2.AccountId, ShouldEqual, o.Account.ID)
+			So(o2.Account.Name, ShouldEqual, o.Account.Name)
+			So(DB.NewRecord(o2), ShouldBeFalse)
 		})
 	})
 }
@@ -97,7 +88,8 @@ func TestAccount(t *testing.T) {
 			err = DB.Save(viewer).Error
 			So(err, ShouldBeNil)
 			// viewer view the one
-			one, err := FindOne([]byte(addr))
+			one := &One{}
+			err = one.Find([]byte(addr))
 			So(err, ShouldBeNil)
 			err = viewer.ViewOne(one)
 			So(err, ShouldBeNil)
@@ -140,7 +132,8 @@ func TestAccount(t *testing.T) {
 			err = DB.Save(viewer).Error
 			So(err, ShouldBeNil)
 			// viewer view the one
-			one, err := FindOne([]byte(addr))
+			one := &One{}
+			err = one.Find([]byte(addr))
 			So(err, ShouldBeNil)
 			err = viewer.ViewOne(one)
 			So(err, ShouldBeNil)
@@ -170,8 +163,8 @@ func TestAccount(t *testing.T) {
 	})
 }
 
-func TestFindOne(t *testing.T) {
-	Convey("FindOne", t, func() {
+func TestOne_Find(t *testing.T) {
+	Convey("One", t, func() {
 		recoveryAccount()
 		Convey("should find an Oauth", func() {
 			addr := "ssssssssss"
@@ -183,7 +176,8 @@ func TestFindOne(t *testing.T) {
 			err = a.RegOne(&One{SecretAddress: addr, BaseModel: BaseModel{Name: "NewOne3"}})
 			So(err, ShouldBeNil)
 
-			one, err := FindOne([]byte(addr))
+			var one One
+			err = one.Find([]byte(addr))
 			So(err, ShouldBeNil)
 			So(one.OwnerId, ShouldEqual, a.ID)
 			So(one.SecretAddress, ShouldEqual, addr)
