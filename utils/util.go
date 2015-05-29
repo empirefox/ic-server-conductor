@@ -3,6 +3,7 @@ package utils
 import (
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 
@@ -54,4 +55,16 @@ func GetEnv(key, defaultValue string) string {
 func GetTypedMsg(t string, m interface{}) ([]byte, error) {
 	msg := map[string]interface{}{"type": t, "content": m}
 	return json.Marshal(msg)
+}
+
+func GetTypedMsgStr(t, m string) []byte {
+	return []byte(fmt.Sprintf(`{"type":"%s","content":"%s"}`, t, m))
+}
+
+func GetTypedInfo(info string) []byte {
+	return GetTypedMsgStr("Info", info)
+}
+
+func GetNamedCmd(from uint, name, cmd string) []byte {
+	return []byte(fmt.Sprintf(`{"from":%d,"name":"%s","content":"%s"}`, from, name, cmd))
 }

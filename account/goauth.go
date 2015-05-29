@@ -8,7 +8,7 @@ import (
 	"github.com/jinzhu/gorm"
 	"golang.org/x/oauth2"
 
-	. "test.com/empirefox/gin-oauth2"
+	. "github.com/empirefox/gin-oauth2"
 )
 
 type OauthProvider struct {

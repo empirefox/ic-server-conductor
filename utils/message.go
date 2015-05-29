@@ -7,12 +7,9 @@ type Message struct {
 }
 
 type Command struct {
-	Name       string `json:"name,omitempty"`
-	Room       uint   `json:"room,omitempty"`
-	RoomName   string `json:"room_name,omitempty"`
-	Camera     string `json:"camera,omitempty"`
-	CameraName string `json:"camera_name,omitempty"`
-	CameraOff  bool   `json:"camera_off,omitempty"`
+	Name    string `json:"name,omitempty"`
+	Room    uint   `json:"room,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 
 // Message Pool
@@ -48,10 +45,7 @@ func EmptyCommand() (c *Command) {
 	case c = <-commandPool:
 		c.Name = ""
 		c.Room = 0
-		c.RoomName = ""
-		c.Camera = ""
-		c.CameraName = ""
-		c.CameraOff = false
+		c.Content = ""
 	default:
 		c = new(Command)
 	}

@@ -16,6 +16,12 @@ var (
 	RecieverDuplicated = errors.New("Reciever duplicated")
 )
 
+type ResponseToMany struct {
+	Room    *ControlRoom
+	To      uint
+	Content []byte
+}
+
 type Hub struct {
 	rooms         map[uint]*ControlRoom
 	msg           chan *Message
@@ -73,7 +79,7 @@ func (h *Hub) onUnreg(room *ControlRoom) {
 
 func (h *Hub) onMsg(msg *Message) {
 	defer msg.Free()
-	msgStr, err := GetTypedMsg("ChatMsg", msg)
+	msgStr, err := GetTypedMsg("Chat", msg)
 	if err != nil {
 		glog.Errorln(err)
 		return
@@ -104,6 +110,9 @@ func (h *Hub) onJoin(many *ManyControlConn) {
 		if !ok {
 			glog.Errorln("Room not found in command")
 			continue
+		}
+		if old, ok := room.Participants[many.ID]; ok {
+			old.Close()
 		}
 		room.Participants[many.ID] = many
 	}

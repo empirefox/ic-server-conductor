@@ -9,10 +9,10 @@ import (
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 
+	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/ic-server-ws-signal/account"
 	. "github.com/empirefox/ic-server-ws-signal/connections"
 	"github.com/empirefox/ic-server-ws-signal/utils"
-	"test.com/empirefox/gin-oauth2"
 )
 
 var (

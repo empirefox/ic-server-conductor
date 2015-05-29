@@ -3,6 +3,7 @@ package connections
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
@@ -91,8 +92,10 @@ func (room *ControlRoom) readPump() {
 		raws := bytes.SplitN(b, []byte{':'}, 3)
 
 		switch string(raws[1]) {
-		case "IpcamsInfo":
-			onOneIpcamsInfo(room, raws[2])
+		case "Ipcams":
+			onOneIpcams(room, raws[2])
+		case "ResponseToMany":
+			onOneResponseToMany(room, raws[2])
 		default:
 			glog.Errorln("Unknow command json:", string(b))
 		}
@@ -144,13 +147,28 @@ func handleOneCtrl(room *ControlRoom) {
 	room.readPump()
 }
 
-func onOneIpcamsInfo(room *ControlRoom, info []byte) {
+func onOneResponseToMany(room *ControlRoom, infoWithTo []byte) {
+	// Ignore error if room/many closed
+	defer recover()
+	raws := bytes.SplitN(infoWithTo, []byte{':'}, 2)
+	to, err := strconv.Atoi(string(raws[0]))
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	room.Participants[uint(to)].Send <- raws[1]
+}
+
+func onOneIpcams(room *ControlRoom, info []byte) {
 	var ipcams Ipcams
 	if err := json.Unmarshal(info, &ipcams); err != nil {
 		glog.Errorln(err)
 		return
 	}
 	room.Cameras = ipcams
+	for _, ctrl := range room.Participants {
+		ctrl.sendCameraList()
+	}
 }
 
 func HandleOneSignaling(h *Hub) gin.HandlerFunc {

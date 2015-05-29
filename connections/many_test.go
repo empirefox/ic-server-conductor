@@ -74,11 +74,18 @@ func Test__ProcessCtrlMessage(t *testing.T) {
 			msg.Free()
 		})
 		Convey("onManyCommand should send cmd to hub.cmd", func() {
-			conn := NewFakeManyConn(`many:Command:{"name":"get"}`, nil)
+			service := fakeService{addr: "a-128"}
+			account.SetService(service)
+			defer account.SetService(nil)
+
+			conn := NewFakeManyConn(`many:Command:{"room":12,"name":"ManageGetIpcam","content":"123"}`, nil)
+			conn.Oauth = &account.Oauth{}
+			conn.ID = 11
+			room := &ControlRoom{Send: make(chan []byte)}
+			conn.Hub.rooms[12] = room
 			go conn.readPump()
-			cmd := <-conn.Hub.cmd
-			So(cmd, ShouldResemble, &Command{Name: "get"})
-			cmd.Free()
+			cmd := <-room.Send
+			So(string(cmd), ShouldEqual, `{"from":11,"name":"ManageGetIpcam","content":"123"}`)
 		})
 		Convey("onManyGetData", func() {
 			Convey("should proccess Username", func() {
@@ -88,7 +95,7 @@ func Test__ProcessCtrlMessage(t *testing.T) {
 				go conn.readPump()
 				go conn.writePump()
 				g.Wait()
-				So(string(g.Result), ShouldResemble, `{"content":"bob","type":"Username"}`)
+				So(string(g.Result), ShouldResemble, `{"type":"Username","content":"bob"}`)
 			})
 			Convey("should proccess CameraList", func() {
 				one1 := account.One{SecretAddress: "addr1"}

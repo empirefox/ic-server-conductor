@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
 
 	. "github.com/empirefox/ic-server-ws-signal/gorm"
 )
@@ -37,6 +38,8 @@ type AccountService interface {
 	RemoveOne(a *Account, o *One) error
 
 	FindOne(o *One, addr []byte) error
+	FindOneIfOwner(o *One, id, ownerId uint) error
+	Save(o *One) error
 }
 
 func NewAccountService() AccountService {
@@ -110,6 +113,14 @@ func (accountService) FindOne(o *One, addr []byte) error {
 		return err
 	}
 	return DB.Model(o).Related(&o.Accounts, "Accounts").Error
+}
+
+func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {
+	return DB.Where(One{Model: gorm.Model{ID: id}, OwnerId: ownerId}).First(o).Error
+}
+
+func (accountService) Save(o *One) error {
+	return DB.Save(o).Error
 }
 
 func (accountService) OnOid(o *Oauth, provider, oid string) error {

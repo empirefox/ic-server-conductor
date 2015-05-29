@@ -71,7 +71,9 @@ type One struct {
 	Accounts      []Account `json:",omitempty"                    gorm:"many2many:account_ones;"`
 }
 
-func (o *One) Find(addr []byte) error { return aservice.FindOne(o, addr) }
+func (o *One) Find(addr []byte) error             { return aservice.FindOne(o, addr) }
+func (o *One) FindIfOwner(id, ownerId uint) error { return aservice.FindOneIfOwner(o, id, ownerId) }
+func (o *One) Save() error                        { return aservice.Save(o) }
 
 /////////////////////////////////////////
 //              AccountOne

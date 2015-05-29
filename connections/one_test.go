@@ -48,20 +48,23 @@ func (s fakeService) FindOne(o *One, addr []byte) error {
 	return errors.New("addr not found")
 }
 
+func (s fakeService) FindOneIfOwner(o *One, id, ownerId uint) error { return nil }
+func (s fakeService) Save(o *One) error                             { return nil }
+
 func TestControlRoom_waitLogin(t *testing.T) {
 	Convey("waitLogin", t, func() {
 		Convey("should login ok", func() {
 			service := fakeService{addr: "a-128"}
-			defer SetService(nil)
 			SetService(service)
+			defer SetService(nil)
 			room := NewFakeRoom(`addr:a-128`, nil)
 			ok := room.waitLogin()
 			So(ok, ShouldBeTrue)
 		})
 		Convey("should login failed", func() {
 			service := fakeService{addr: "a-128"}
-			defer SetService(nil)
 			SetService(service)
+			defer SetService(nil)
 			room := NewFakeRoom(`addr:b-128`, nil)
 			ok := room.waitLogin()
 			So(ok, ShouldBeFalse)
@@ -72,7 +75,7 @@ func TestControlRoom_waitLogin(t *testing.T) {
 func Test_readPump(t *testing.T) {
 	Convey("readPump", t, func() {
 		Convey("onOneIpcamsInfo should get ipcams from msg", func() {
-			room := NewFakeRoom(`one:IpcamsInfo:{"id1":{"id":"id1"},"id2":{"id":"id2"}}`, nil)
+			room := NewFakeRoom(`one:Ipcams:{"id1":{"id":"id1"},"id2":{"id":"id2"}}`, nil)
 			room.readPump()
 			So(room.Cameras, ShouldResemble, Ipcams{"id1": Ipcam{Id: "id1"}, "id2": Ipcam{Id: "id2"}})
 		})

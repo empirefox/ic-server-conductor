@@ -19,6 +19,7 @@ const (
 )
 
 type ManyControlConn struct {
+	Key string
 	Connection
 	*Oauth
 	Send chan []byte
@@ -56,10 +57,10 @@ type CameraRoom struct {
 
 type CameraList struct {
 	Type  string       `json:"type,omitempty"`
-	Rooms []CameraRoom `json:"rooms,omitempty"`
+	Rooms []CameraRoom `json:"content,omitempty"`
 }
 
-func (conn *ManyControlConn) sendCameraList() error {
+func (conn *ManyControlConn) genCameraList() ([]byte, error) {
 	list := CameraList{
 		Type:  "CameraList",
 		Rooms: make([]CameraRoom, 0, len(conn.Account.Ones)),
@@ -81,10 +82,18 @@ func (conn *ManyControlConn) sendCameraList() error {
 	}
 	cameraList, err := json.Marshal(list)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	conn.Send <- cameraList
-	return nil
+	return cameraList, nil
+}
+
+func (conn *ManyControlConn) sendCameraList() {
+	cameras, err := conn.genCameraList()
+	if err != nil {
+		conn.Send <- GetTypedInfo("Cannot get cameras")
+		return
+	}
+	conn.Send <- cameras
 }
 
 // with ping
@@ -183,23 +192,48 @@ func onManyChat(many *ManyControlConn, bmsg []byte) {
 
 func onManyCommand(many *ManyControlConn, bcmd []byte) {
 	cmd := EmptyCommand()
+	defer cmd.Free()
 	if err := json.Unmarshal(bcmd, cmd); err != nil {
 		glog.Errorln(err)
-		cmd.Free()
 		return
 	}
-	many.Hub.cmd <- cmd
+
+	one := &One{}
+	if err := one.FindIfOwner(cmd.Room, many.Account.ID); err != nil {
+		glog.Errorln(err)
+		return
+	}
+
+	switch cmd.Name {
+	case "ManageSetRoomName":
+		// Content: new_name
+		// Proccess in server
+		one.Name = cmd.Content
+		if err := one.Save(); err != nil {
+			glog.Errorln(err)
+			many.Send <- GetTypedInfo("SetRoomName Error")
+			return
+		}
+		many.sendCameraList()
+	case "ManageGetIpcam", "ManageSetIpcam", "ManageReconnectIpcam":
+		// Content(string): from, name, content
+		// Pass to One
+		room, ok := many.Hub.rooms[cmd.Room]
+		if !ok {
+			many.Send <- GetTypedInfo("Room not online")
+			return
+		}
+		room.Send <- GetNamedCmd(many.ID, cmd.Name, cmd.Content)
+	default:
+		glog.Errorln("Unknow Command name:", cmd.Name)
+		many.Send <- GetTypedInfo("Unknow Command name:" + cmd.Name)
+	}
 }
 
 func onManyGetData(many *ManyControlConn, name []byte) {
 	switch string(name) {
 	case "Username":
-		msg, err := GetTypedMsg(string(name), many.Account.Name)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		many.Send <- msg
+		many.Send <- GetTypedMsgStr(string(name), many.Account.Name)
 	case "CameraList":
 		many.sendCameraList()
 	default:
