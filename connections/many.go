@@ -243,12 +243,6 @@ func onManyGetData(many *ManyControlConn, name []byte) {
 
 // many signaling
 
-type CreateSignalingConnectionCommand struct {
-	Name     string `json:"name"`
-	Reciever string `json:"reciever"`
-	Camera   string `json:"camera"`
-}
-
 func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glog.Infoln("many signaling coming")
@@ -270,6 +264,16 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	}
 }
 
+type CreateSignalingSubCommand struct {
+	Camera   string `json:"camera,omitempty"`
+	Reciever string `json:"reciever,omitempty"`
+}
+
+type CreateSignalingConnectionCommand struct {
+	Name    string                    `json:"name"`
+	Content CreateSignalingSubCommand `json:"content"`
+}
+
 func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, reciever string) {
 	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 	if err != nil {
@@ -284,11 +288,13 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 		panic("Cameras not found in room")
 	}
 	cmd := CreateSignalingConnectionCommand{
-		Name:     "CreateSignalingConnection",
-		Camera:   c.Params.ByName("camera"),
-		Reciever: c.Params.ByName("reciever"),
+		Name: "CreateSignalingConnection",
+		Content: CreateSignalingSubCommand{
+			Camera:   c.Params.ByName("camera"),
+			Reciever: c.Params.ByName("reciever"),
+		},
 	}
-	_, ok = cameras[cmd.Camera]
+	_, ok = cameras[cmd.Content.Camera]
 	if !ok {
 		panic("Camera not found in room")
 	}
@@ -296,10 +302,10 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 	if err != nil {
 		panic(err)
 	}
-	res, err = h.waitForProcess(cmd.Reciever)
+	res, err = h.waitForProcess(cmd.Content.Reciever)
 	if err != nil {
 		panic(err)
 	}
 	room.Send <- cmdStr
-	return res, cmd.Reciever
+	return res, cmd.Content.Reciever
 }
