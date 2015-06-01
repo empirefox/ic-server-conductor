@@ -3,6 +3,7 @@ package connections
 import (
 	"bytes"
 	"encoding/json"
+	"net/http"
 	"strconv"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
+	"github.com/empirefox/gin-oauth2"
 	. "github.com/empirefox/ic-server-ws-signal/account"
 	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
@@ -52,6 +54,7 @@ func (conn *ManyControlConn) getOauth(c *gin.Context) bool {
 type CameraRoom struct {
 	Id      uint    `json:"id,omitempty"`
 	Name    string  `json:"name,omitempty"`
+	IsOwner bool    `json:"isOwner,omitempty"`
 	Cameras []Ipcam `json:"cameras,omitempty"`
 }
 
@@ -70,6 +73,7 @@ func (conn *ManyControlConn) genCameraList() ([]byte, error) {
 			r := CameraRoom{
 				Id:      one.ID,
 				Name:    one.Name,
+				IsOwner: one.OwnerId == conn.Account.ID,
 				Cameras: make([]Ipcam, 0, len(room.Cameras)),
 			}
 			j := 0
@@ -216,7 +220,7 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 		}
 		many.sendCameraList()
 	case "ManageGetIpcam", "ManageSetIpcam", "ManageReconnectIpcam":
-		// Content(string): from, name, content
+		// Content(string): ipcam_id/ipcam/ipcam_id
 		// Pass to One
 		room, ok := many.Hub.rooms[cmd.Room]
 		if !ok {
@@ -232,12 +236,13 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 
 func onManyGetData(many *ManyControlConn, name []byte) {
 	switch string(name) {
-	case "Username":
+	case "Userinfo":
 		many.Send <- GetTypedMsgStr(string(name), many.Account.Name)
 	case "CameraList":
 		many.sendCameraList()
 	default:
 		glog.Errorln("Unknow GetManyData name:", string(name))
+		many.Send <- GetTypedInfo("Unknow GetManyData name:" + string(name))
 	}
 }
 
@@ -308,4 +313,14 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 	}
 	room.Send <- cmdStr
 	return res, cmd.Content.Reciever
+}
+
+func HandleManyCheckLogin(config *goauth.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if ok, _ := config.CheckStatus(c, goauth.Permitted); ok {
+			c.JSON(http.StatusOK, "")
+		} else {
+			c.JSON(http.StatusUnauthorized, "")
+		}
+	}
 }

@@ -69,6 +69,7 @@ func main() {
 	many.Use(goauth.Setup(conf))
 	many.GET("/ctrl", HandleManyCtrl(h))
 	many.GET("/signaling/:room/:camera/:reciever", HandleManySignaling(h))
+	many.GET("/checklogin", HandleManyCheckLogin(conf))
 
 	router.Run(*addr)
 }

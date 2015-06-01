@@ -90,17 +90,18 @@ func Test__ProcessCtrlMessage(t *testing.T) {
 		Convey("onManyGetData", func() {
 			Convey("should proccess Username", func() {
 				var g msgGetter
-				conn := NewFakeManyConn(`many:GetManyData:Username`, g.GenOnSend())
+				conn := NewFakeManyConn(`many:GetManyData:Userinfo`, g.GenOnSend())
 				conn.Account.Name = "bob"
 				go conn.readPump()
 				go conn.writePump()
 				g.Wait()
-				So(string(g.Result), ShouldResemble, `{"type":"Username","content":"bob"}`)
+				So(string(g.Result), ShouldResemble, `{"type":"Userinfo","content":"bob"}`)
 			})
 			Convey("should proccess CameraList", func() {
 				one1 := account.One{SecretAddress: "addr1"}
 				one1.ID = 1
 				one1.Name = "one1"
+				one1.OwnerId = 1
 				room1 := &ControlRoom{One: &one1}
 				one2 := account.One{SecretAddress: "addr2"}
 				one2.ID = 2
