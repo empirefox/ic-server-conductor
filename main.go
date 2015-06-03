@@ -70,6 +70,7 @@ func main() {
 	many.GET("/ctrl", HandleManyCtrl(h))
 	many.GET("/signaling/:room/:camera/:reciever", HandleManySignaling(h))
 	many.GET("/checklogin", HandleManyCheckLogin(conf))
+	many.POST("/reg-room", conf.Check(goauth.Permitted), HandleManyRegRoom(h, conf))
 
 	router.Run(*addr)
 }

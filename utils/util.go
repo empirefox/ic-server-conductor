@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jaytaylor/uuid"
 )
 
 const (
@@ -67,4 +68,9 @@ func GetTypedInfo(info string) []byte {
 
 func GetNamedCmd(from uint, name, cmd string) []byte {
 	return []byte(fmt.Sprintf(`{"from":%d,"name":"%s","content":"%s"}`, from, name, cmd))
+}
+
+func NewUUID() string {
+	u5, _ := uuid.NewV5(uuid.NamespaceURL, []byte("ic-server-ws-signal"))
+	return u5.String()
 }

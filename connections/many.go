@@ -315,12 +315,33 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 	return res, cmd.Content.Reciever
 }
 
-func HandleManyCheckLogin(config *goauth.Config) gin.HandlerFunc {
+func HandleManyCheckLogin(conf *goauth.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if ok, _ := config.CheckStatus(c, goauth.Permitted); ok {
+		if ok, _ := conf.CheckStatus(c, goauth.Permitted); ok {
 			c.JSON(http.StatusOK, "")
 		} else {
 			c.JSON(http.StatusUnauthorized, "")
 		}
+	}
+}
+
+type regRoomData struct {
+	Name string `json:"name"`
+}
+
+func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var data regRoomData
+		if !c.Bind(&data) {
+			c.JSON(http.StatusBadRequest, "")
+			return
+		}
+
+		one := One{SecretAddress: NewUUID()}
+		one.Name = data.Name
+		if err := c.Keys[conf.UserGinKey].(*Account).RegOne(&one); err != nil {
+			panic(err)
+		}
+		c.JSON(http.StatusOK, gin.H{"addr": one.SecretAddress})
 	}
 }
