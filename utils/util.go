@@ -20,12 +20,6 @@ const (
 )
 
 var (
-	paasVendors = map[string]map[string]bool{
-		"PAAS_VENDOR": {
-			"cloudControl": true,
-		},
-	}
-
 	Upgrader = websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
@@ -35,15 +29,6 @@ var (
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
 )
-
-func IsProduction() bool {
-	for envName, values := range paasVendors {
-		if actual := os.Getenv(envName); values[actual] {
-			return true
-		}
-	}
-	return false
-}
 
 func GetEnv(key, defaultValue string) string {
 	value := os.Getenv(key)

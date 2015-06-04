@@ -12,6 +12,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/empirefox/gin-oauth2"
+	gws "github.com/empirefox/gotool/ws"
 	. "github.com/empirefox/ic-server-ws-signal/account"
 	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
@@ -264,7 +265,7 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 			panic(err)
 		}
 		defer ws.Close()
-		Pipe(ws, resWs)
+		gws.Pipe(ws, resWs)
 		res <- nil
 	}
 }
