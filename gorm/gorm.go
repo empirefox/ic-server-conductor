@@ -1,12 +1,13 @@
-//GORM_DIALECT=mysql DB_URL="gorm:gorm@/gorm?charset=utf8&parseTime=True"
-//GORM_DIALECT=postgres DB_URL="postgres://postgres:6Vno3r3gH9sZHSxo@localhost/ic_signal_test?sslmode=disable"
-//GORM_DIALECT=sqlite3 DB_URL=/tmp/gorm.DB
+//DB_URL="gorm:gorm@/gorm?charset=utf8&parseTime=True"
+//DB_URL="postgres://postgres:6Vno3r3gH9sZHSxo@localhost/ic_signal_test?sslmode=disable"
+//Notsupported: GORM_DIALECT=sqlite3 DB_URL=/tmp/gorm.DB
 package gorm
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/empirefox/gotool/paas"
 	"github.com/jinzhu/gorm"
 	//	_ "github.com/lib/pq"
 	//	_ "github.com/go-sql-driver/mysql"
@@ -22,20 +23,17 @@ func init() {
 		return
 	}
 
-	var err error
-	vendor := os.Getenv("GORM_DIALECT")
-	url := os.Getenv("DB_URL")
-
-	if vendor == "" || url == "" {
-		panic("数据库环境变量没有正确设置")
+	paasGorm := paas.GetGorm()
+	if paasGorm.Url == "" {
+		panic("Now in test mode, but 'DB_URL' must be set")
 	}
 
-	DB, err = gorm.Open(vendor, url)
-
+	var err error
+	DB, err = gorm.Open(paasGorm.Dialect, paasGorm.Url)
 	if err != nil {
 		panic(fmt.Sprintf("No error should happen when connect database, but got %+v", err))
 	}
 
-	DB.DB().SetMaxIdleConns(5)
-	DB.DB().SetMaxOpenConns(10)
+	DB.DB().SetMaxIdleConns(paasGorm.MaxIdle)
+	DB.DB().SetMaxOpenConns(paasGorm.MaxOpen)
 }

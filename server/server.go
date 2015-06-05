@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/empirefox/gin-oauth2"
+	"github.com/empirefox/gotool/paas"
 	. "github.com/empirefox/ic-server-ws-signal/connections"
 )
 
@@ -13,7 +14,6 @@ type Server struct {
 	Hub         *Hub
 	OauthConfig *goauth.Config
 	OauthJson   []byte
-	Addr        string
 	IsDevMode   bool
 }
 
@@ -50,5 +50,5 @@ func (s *Server) Run() error {
 	many.GET("/checklogin", HandleManyCheckLogin(s.OauthConfig))
 	many.POST("/reg-room", s.OauthConfig.Check(goauth.Permitted), HandleManyRegRoom(s.Hub, s.OauthConfig))
 
-	return router.Run(s.Addr)
+	return router.Run(paas.GetBindAddr())
 }
