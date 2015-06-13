@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+	"time"
 
+	"github.com/dchest/uniuri"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
@@ -32,6 +34,8 @@ type Hub struct {
 	leave         chan *ManyControlConn
 	sigResWaitMap map[string]chan *websocket.Conn
 	sigResMutex   sync.Mutex
+	inviteCodes   map[uint]codes
+	inviteMutex   sync.Mutex
 }
 
 func NewHub() *Hub {
@@ -44,6 +48,8 @@ func NewHub() *Hub {
 		make(chan *ManyControlConn),
 		make(chan *ManyControlConn),
 		make(map[string]chan *websocket.Conn),
+		sync.Mutex{},
+		make(map[uint]codes),
 		sync.Mutex{},
 	}
 }
@@ -150,4 +156,53 @@ func (h *Hub) processFromWait(reciever string) (chan *websocket.Conn, error) {
 		return resWait, nil
 	}
 	return nil, RecieverNotFound
+}
+
+type codes map[string]chan bool
+
+func (cs codes) genCode() (string, chan bool) {
+	code := uniuri.NewLen(8)
+	if _, ok := cs[code]; ok {
+		return cs.genCode()
+	}
+	stop := make(chan bool)
+	cs[code] = stop
+	return code, stop
+}
+
+func (h *Hub) waitForStop(cs codes, code string, stop chan bool) {
+	select {
+	case <-stop:
+	case <-time.After(time.Minute * 10):
+	}
+	h.inviteMutex.Lock()
+	defer h.inviteMutex.Unlock()
+	if _, ok := cs[code]; ok {
+		delete(cs, code)
+	}
+}
+
+func (h *Hub) ValidateInviteCode(room uint, code string) bool {
+	h.inviteMutex.Lock()
+	defer h.inviteMutex.Unlock()
+	if cs, ok := h.inviteCodes[room]; ok {
+		if stop, has := cs[code]; has {
+			stop <- true
+			return true
+		}
+	}
+	return false
+}
+
+func (h *Hub) NewInviteCode(room uint) string {
+	h.inviteMutex.Lock()
+	defer h.inviteMutex.Unlock()
+	cs, ok := h.inviteCodes[room]
+	if !ok {
+		cs = make(codes)
+		h.inviteCodes[room] = cs
+	}
+	code, stop := cs.genCode()
+	go h.waitForStop(cs, code, stop)
+	return code
 }

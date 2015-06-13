@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 
 	. "github.com/empirefox/ic-server-ws-signal/gorm"
 )
@@ -108,7 +107,9 @@ func (accountService) RemoveOne(a *Account, one *One) error {
 }
 
 func (accountService) FindOne(o *One, addr []byte) error {
-	err := DB.Where(One{SecretAddress: string(addr)}).Preload("Owner").First(o).Error
+	var w One
+	w.SecretAddress = string(addr)
+	err := DB.Where(w).Preload("Owner").First(o).Error
 	if err != nil {
 		return err
 	}
@@ -116,7 +117,10 @@ func (accountService) FindOne(o *One, addr []byte) error {
 }
 
 func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {
-	return DB.Where(One{Model: gorm.Model{ID: id}, OwnerId: ownerId}).First(o).Error
+	var w One
+	w.ID = id
+	w.OwnerId = ownerId
+	return DB.Where(w).First(o).Error
 }
 
 func (accountService) Save(o *One) error {

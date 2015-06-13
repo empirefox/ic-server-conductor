@@ -42,6 +42,7 @@ func (c *OauthProvider) ConfigProvider() Provider {
 		},
 		Name:         c.Name,
 		UserEndpoint: c.UserEndpoint,
+		OidJsonPath:  c.OidJsonPath,
 	}
 }
 

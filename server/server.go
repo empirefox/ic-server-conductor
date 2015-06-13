@@ -6,8 +6,11 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/empirefox/gin-oauth2"
+	"github.com/empirefox/gotool/dp"
+	"github.com/empirefox/gotool/ng"
 	"github.com/empirefox/gotool/paas"
 	. "github.com/empirefox/ic-server-ws-signal/connections"
+	"github.com/empirefox/ic-server-ws-signal/invite"
 )
 
 type Server struct {
@@ -18,6 +21,7 @@ type Server struct {
 }
 
 func (s *Server) Run() error {
+	dp.SetDevMode(paas.IsDevMode)
 	router := gin.Default()
 
 	router.Use(secure.Secure(secure.Options{
@@ -28,6 +32,18 @@ func (s *Server) Run() error {
 
 	// peer from MANY client
 	router.Use(static.Serve("/", static.LocalFile("./public", false)))
+	router.GET("/ng/sys-data.js", func(c *gin.Context) {
+		ng.Write(c.Writer, ng.Module{
+			Type:       "constant",
+			ModuleName: "app.constants.system",
+			Name:       "SystemData",
+			Instance: map[string]interface{}{
+				"DevProd": dp.Mode,
+			},
+		})
+	})
+
+	router.Use(goauth.Setup(s.OauthConfig))
 
 	// login page will be find in static serve
 	// logout will proccess some logic
@@ -44,11 +60,14 @@ func (s *Server) Run() error {
 	// websocket
 	// peer from MANY client
 	many := router.Group("/many")
-	many.Use(goauth.Setup(s.OauthConfig))
 	many.GET("/ctrl", HandleManyCtrl(s.Hub))
 	many.GET("/signaling/:room/:camera/:reciever", HandleManySignaling(s.Hub))
+
+	// rest
 	many.GET("/checklogin", HandleManyCheckLogin(s.OauthConfig))
 	many.POST("/reg-room", s.OauthConfig.Check(goauth.Permitted), HandleManyRegRoom(s.Hub, s.OauthConfig))
+	many.GET("/invite-code/:room", s.OauthConfig.Check(goauth.Permitted), invite.HandleManyGetInviteCode(s.Hub, s.OauthConfig))
+	many.GET("/invite/:room/:code", s.OauthConfig.Check(goauth.Permitted), invite.HandleManyOnInvite(s.Hub, s.OauthConfig))
 
 	return router.Run(paas.GetBindAddr())
 }

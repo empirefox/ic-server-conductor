@@ -67,7 +67,7 @@ type One struct {
 	SecretAddress string    `json:",omitempty" binding:"required" sql:"not null;type:varchar(128);unique"`
 	Enabled       bool      `json:",omitempty"                    sql:"default:true"`
 	Owner         Account   `json:",omitempty"`
-	OwnerId       uint      `json:"-"`
+	OwnerId       uint      `json:",omitempty"`
 	Accounts      []Account `json:",omitempty"                    gorm:"many2many:account_ones;"`
 }
 
