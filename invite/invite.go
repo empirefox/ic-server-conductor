@@ -50,6 +50,10 @@ func HandleManyOnInvite(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 		if err := user.ViewOne(one); err != nil {
 			panic("Cannot be invited to the room")
 		}
-		c.JSON(http.StatusOK, "")
+		if c.Request.URL.Query().Get("type") == "json" {
+			c.JSON(http.StatusOK, "")
+			return
+		}
+		c.Redirect(http.StatusSeeOther, conf.PathSuccess)
 	}
 }
