@@ -3,6 +3,7 @@ package connections
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -67,7 +68,7 @@ type CameraList struct {
 func (conn *ManyControlConn) genCameraList() ([]byte, error) {
 	list := CameraList{
 		Type:  "CameraList",
-		Rooms: make([]CameraRoom, 0, len(conn.Account.Ones)),
+		Rooms: make([]CameraRoom, 0),
 	}
 	for _, one := range conn.Account.Ones {
 		if room, ok := conn.Hub.rooms[one.ID]; ok {
@@ -75,12 +76,10 @@ func (conn *ManyControlConn) genCameraList() ([]byte, error) {
 				Id:      one.ID,
 				Name:    one.Name,
 				IsOwner: one.OwnerId == conn.Account.ID,
-				Cameras: make([]Ipcam, 0, len(room.Cameras)),
+				Cameras: make([]Ipcam, 0),
 			}
-			j := 0
 			for _, ipcam := range room.Cameras {
-				r.Cameras[j] = ipcam
-				j++
+				r.Cameras = append(r.Cameras, ipcam)
 			}
 			list.Rooms = append(list.Rooms, r)
 		}
@@ -270,14 +269,9 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	}
 }
 
-type CreateSignalingSubCommand struct {
-	Camera   string `json:"camera,omitempty"`
-	Reciever string `json:"reciever,omitempty"`
-}
-
 type CreateSignalingConnectionCommand struct {
-	Name    string                    `json:"name"`
-	Content CreateSignalingSubCommand `json:"content"`
+	Name    string `json:"name"`
+	Content string `json:"content"`
 }
 
 func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, reciever string) {
@@ -293,14 +287,13 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 	if cameras == nil {
 		panic("Cameras not found in room")
 	}
+	camera := c.Params.ByName("camera")
+	reciever = c.Params.ByName("reciever")
 	cmd := CreateSignalingConnectionCommand{
-		Name: "CreateSignalingConnection",
-		Content: CreateSignalingSubCommand{
-			Camera:   c.Params.ByName("camera"),
-			Reciever: c.Params.ByName("reciever"),
-		},
+		Name:    "CreateSignalingConnection",
+		Content: fmt.Sprintf(`{"camera":"%s","reciever":"%s"}`, camera, reciever),
 	}
-	_, ok = cameras[cmd.Content.Camera]
+	_, ok = cameras[camera]
 	if !ok {
 		panic("Camera not found in room")
 	}
@@ -308,12 +301,12 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 	if err != nil {
 		panic(err)
 	}
-	res, err = h.waitForProcess(cmd.Content.Reciever)
+	res, err = h.waitForProcess(reciever)
 	if err != nil {
 		panic(err)
 	}
 	room.Send <- cmdStr
-	return res, cmd.Content.Reciever
+	return res, reciever
 }
 
 func HandleManyCheckLogin(conf *goauth.Config) gin.HandlerFunc {
@@ -340,7 +333,7 @@ func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 
 		one := One{SecretAddress: NewUUID()}
 		one.Name = data.Name
-		if err := c.Keys[conf.UserGinKey].(*Account).RegOne(&one); err != nil {
+		if err := c.Keys[conf.UserGinKey].(*Oauth).Account.RegOne(&one); err != nil {
 			panic(err)
 		}
 		c.JSON(http.StatusOK, gin.H{"addr": one.SecretAddress})
