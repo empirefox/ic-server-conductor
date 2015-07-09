@@ -39,9 +39,9 @@ func newManyControlConn(h *Hub, ws *websocket.Conn) *ManyControlConn {
 }
 
 func (conn *ManyControlConn) getOauth(c *gin.Context) bool {
-	iuser, err := c.Get(GinKeyUser)
-	if err != nil {
-		glog.Infoln(err)
+	iuser, ok := c.Get(GinKeyUser)
+	if !ok {
+		glog.Infoln("user not found")
 		return false
 	}
 	user, ok := iuser.(*Oauth)
@@ -326,8 +326,8 @@ type regRoomData struct {
 func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data regRoomData
-		if !c.Bind(&data) {
-			c.JSON(http.StatusBadRequest, "")
+		if err := c.Bind(&data); err != nil {
+			c.JSON(http.StatusBadRequest, err)
 			return
 		}
 

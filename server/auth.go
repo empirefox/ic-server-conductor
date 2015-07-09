@@ -18,8 +18,8 @@ func CheckIsSystemMode(c *gin.Context) {
 
 func SaveOauth(c *gin.Context) {
 	var op OauthProvider
-	if !c.Bind(&op) {
-		c.JSON(http.StatusBadRequest, gin.H{"error": 1, "content": "Bind error"})
+	if err := c.Bind(&op); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": 1, "content": err})
 		return
 	}
 
