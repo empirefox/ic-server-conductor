@@ -14,10 +14,11 @@ import (
 )
 
 type Server struct {
-	Hub         *Hub
-	OauthConfig *goauth.Config
-	OauthJson   []byte
-	IsDevMode   bool
+	Hub          *Hub
+	OauthConfig  *goauth.Config
+	OauthJson    []byte
+	IsDevMode    bool
+	ValidateGets map[string]string
 }
 
 func (s *Server) Run() error {
@@ -42,6 +43,11 @@ func (s *Server) Run() error {
 			},
 		})
 	})
+	for k, v := range s.ValidateGets {
+		router.GET(k, func(c *gin.Context) {
+			c.Writer.Write([]byte(v))
+		})
+	}
 
 	router.Use(goauth.Setup(s.OauthConfig))
 
@@ -51,6 +57,9 @@ func (s *Server) Run() error {
 	router.GET("/auth/oauths", func(c *gin.Context) {
 		c.Writer.Write(s.OauthJson)
 	})
+
+	sys := router.Group("/sys", CheckIsSystemMode)
+	sys.POST("/oauth", SaveOauth)
 
 	// peer from ONE client
 	one := router.Group("/one")

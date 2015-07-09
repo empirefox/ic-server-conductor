@@ -28,6 +28,10 @@ type OauthProvider struct {
 	Css string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 }
 
+func (op *OauthProvider) Save() error {
+	return aservice.SaveOauthProvider(op)
+}
+
 func (c *OauthProvider) ConfigProvider() Provider {
 	return Provider{
 		Config: oauth2.Config{

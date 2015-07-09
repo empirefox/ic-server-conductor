@@ -27,6 +27,7 @@ type AccountService interface {
 	DropTables() error
 
 	FindOauthProviders(ops *[]OauthProvider) error
+	SaveOauthProvider(op *OauthProvider) error
 
 	OnOid(o *Oauth, provider, oid string) error
 	Permitted(o *Oauth, c *gin.Context) bool
@@ -66,6 +67,10 @@ func (accountService) DropTables() error {
 
 func (accountService) FindOauthProviders(ops *[]OauthProvider) error {
 	return DB.Where(OauthProvider{Enabled: true}).Find(ops).Error
+}
+
+func (accountService) SaveOauthProvider(op *OauthProvider) error {
+	return DB.Save(op).Error
 }
 
 // one must be non-exist record

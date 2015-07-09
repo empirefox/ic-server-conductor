@@ -21,8 +21,8 @@ type Oauth struct {
 	AccountId uint    `json:"-"`
 	Oid       string  `json:",omitempty" binding:"required" sql:"type:varchar(128);not null"`
 	Provider  string  `json:",omitempty" binding:"required" sql:"type:varchar(32);not null"`
-	Validated bool    `json:",omitempty"                    sql:"default:false"`
-	Enabled   bool    `json:",omitempty"                    sql:"default:false"`
+	Validated bool    `json:",omitempty"                    sql:"default:true"`
+	Enabled   bool    `json:",omitempty"                    sql:"default:true"`
 }
 
 // Find Oauth, preload Account and Account.Ones
@@ -41,7 +41,7 @@ type Account struct {
 	BaseModel
 	Oauths  []Oauth `json:",omitempty"`
 	Ones    []One   `json:",omitempty" gorm:"many2many:account_ones;"`
-	Enabled bool    `json:",omitempty" sql:"default:false"`
+	Enabled bool    `json:",omitempty" sql:"default:true"`
 }
 
 // one must be non-exist record
