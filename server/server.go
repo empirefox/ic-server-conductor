@@ -26,6 +26,7 @@ func (s *Server) Run() error {
 	router := gin.Default()
 
 	router.Use(PlainGets(s.ValidateGets))
+	router.Use(goauth.Setup(s.OauthConfig))
 
 	router.Use(secure.Secure(secure.Options{
 		SSLRedirect:     true,
@@ -33,8 +34,8 @@ func (s *Server) Run() error {
 		IsDevelopment:   s.IsDevMode,
 	}))
 
-	// peer from MANY client
 	router.Use(static.Serve("/", static.LocalFile("./public", false)))
+	// peer from MANY client
 	router.GET("/ng/sys-data.js", func(c *gin.Context) {
 		ng.Write(c.Writer, ng.Module{
 			Type:       "constant",
@@ -45,8 +46,6 @@ func (s *Server) Run() error {
 			},
 		})
 	})
-
-	router.Use(goauth.Setup(s.OauthConfig))
 
 	// login page will be find in static serve
 	// logout will proccess some logic
