@@ -25,6 +25,8 @@ func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	router := gin.Default()
 
+	router.Use(PlainGets(s.ValidateGets))
+
 	router.Use(secure.Secure(secure.Options{
 		SSLRedirect:     true,
 		SSLProxyHeaders: map[string]string{"X-Forwarded-Proto": "https"},
@@ -43,11 +45,6 @@ func (s *Server) Run() error {
 			},
 		})
 	})
-	for k, v := range s.ValidateGets {
-		router.GET(k, func(c *gin.Context) {
-			c.Writer.Write([]byte(v))
-		})
-	}
 
 	router.Use(goauth.Setup(s.OauthConfig))
 
