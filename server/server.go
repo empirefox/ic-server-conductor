@@ -11,6 +11,7 @@ import (
 	"github.com/empirefox/gotool/paas"
 	. "github.com/empirefox/ic-server-ws-signal/connections"
 	"github.com/empirefox/ic-server-ws-signal/invite"
+	"github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 type Server struct {
@@ -34,7 +35,7 @@ func (s *Server) Run() error {
 		IsDevelopment:   s.IsDevMode,
 	}))
 
-	router.Use(static.Serve("/", static.LocalFile("./public", false)))
+	router.Use(static.Serve("/", static.LocalFile(utils.GetStaticDir("public"), false)))
 	// peer from MANY client
 	router.GET("/ng/sys-data.js", func(c *gin.Context) {
 		ng.Write(c.Writer, ng.Module{

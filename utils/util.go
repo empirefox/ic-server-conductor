@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 	"github.com/jaytaylor/uuid"
 )
@@ -36,6 +38,18 @@ func GetEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func GetStaticDir(dir string) string {
+	pwd, err := os.Getwd()
+	if err != nil {
+		glog.Errorln(err)
+		return dir
+	}
+	if !filepath.IsAbs(dir) {
+		dir = filepath.Join(pwd, dir)
+	}
+	return dir
 }
 
 func GetTypedMsg(t string, m interface{}) ([]byte, error) {
