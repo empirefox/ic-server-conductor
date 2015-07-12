@@ -35,7 +35,7 @@ func (s *Server) Run() error {
 		IsDevelopment:   s.IsDevMode,
 	}))
 
-	router.Use(static.Serve("/", static.LocalFile(utils.GetStaticDir("public"), false)))
+	router.Use(static.Serve("/", static.LocalFile(utils.GetStaticDir("public"), true)))
 	// peer from MANY client
 	router.GET("/ng/sys-data.js", func(c *gin.Context) {
 		ng.Write(c.Writer, ng.Module{
