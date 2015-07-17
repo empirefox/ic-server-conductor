@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
 
 	. "github.com/empirefox/ic-server-ws-signal/gorm"
 )
@@ -138,13 +139,17 @@ func (accountService) Save(o *One) error {
 }
 
 func (accountService) OnOid(o *Oauth, provider, oid string) error {
-	err := DB.Where(Oauth{Provider: provider, Oid: oid}).
-		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}}}).
+	err := DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
+		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
 	if err != nil {
 		return err
 	}
-	return DB.Model(&o.Account).Related(&o.Account.Ones, "Ones").Error
+	err = DB.Model(&o.Account).Related(&o.Account.Ones, "Ones").Error
+	if err == gorm.RecordNotFound {
+		return nil
+	}
+	return err
 }
 
 func (accountService) Permitted(o *Oauth, c *gin.Context) bool { return o.Validated }
