@@ -36,6 +36,7 @@ type AccountService interface {
 	RegOne(a *Account, o *One) error
 	ViewOne(a *Account, o *One) error
 	RemoveOne(a *Account, o *One) error
+	Logoff(a *Account) error
 
 	FindOne(o *One, addr []byte) error
 	FindOneIfOwner(o *One, id, ownerId uint) error
@@ -71,6 +72,10 @@ func (accountService) FindOauthProviders(ops *[]OauthProvider) error {
 
 func (accountService) SaveOauthProvider(op *OauthProvider) error {
 	return DB.Save(op).Error
+}
+
+func (accountService) Logoff(a *Account) error {
+	return DB.Unscoped().Delete(a).Error
 }
 
 // one must be non-exist record

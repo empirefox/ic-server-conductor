@@ -115,6 +115,7 @@ func (room *ControlRoom) waitLogin() (ok bool) {
 	one := &One{}
 	if err = one.Find(addrb[5:]); err != nil {
 		glog.Errorln(err)
+		room.Send <- []byte(`{"name":"LoginAddrError"}`)
 		return
 	}
 	room.One = one

@@ -71,6 +71,7 @@ func (s *Server) Run() error {
 
 	// rest
 	many.GET("/checklogin", HandleManyCheckLogin(s.OauthConfig))
+	many.GET("/logoff", s.OauthConfig.Check(goauth.Permitted), HandleManyLogoff(s.Hub, s.OauthConfig))
 	many.POST("/reg-room", s.OauthConfig.Check(goauth.Permitted), HandleManyRegRoom(s.Hub, s.OauthConfig))
 	many.GET("/invite-code/:room", s.OauthConfig.Check(goauth.Permitted), invite.HandleManyGetInviteCode(s.Hub, s.OauthConfig))
 	many.GET("/invite/:room/:code", s.OauthConfig.Check(goauth.Permitted), invite.HandleManyOnInvite(s.Hub, s.OauthConfig))

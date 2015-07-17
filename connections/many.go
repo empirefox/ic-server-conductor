@@ -339,3 +339,18 @@ func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"addr": one.SecretAddress})
 	}
 }
+
+func HandleManyLogoff(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		iuser, ok := c.Get(conf.UserGinKey)
+		if !ok {
+			c.JSON(http.StatusForbidden, `{"error":1,"content":"user not authed"}`)
+			return
+		}
+		if err := iuser.(*Oauth).Account.Logoff(); err != nil {
+			c.JSON(http.StatusInternalServerError, `{"error":1,"content":"cannot del user"}`)
+			return
+		}
+		c.Redirect(http.StatusSeeOther, conf.PathLogout)
+	}
+}

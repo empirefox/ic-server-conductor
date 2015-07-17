@@ -56,6 +56,8 @@ func (a *Account) ViewOne(o *One) error { return aservice.ViewOne(a, o) }
 // a   must be from Oauth.OnOid
 func (a *Account) RemoveOne(o *One) error { return aservice.RemoveOne(a, o) }
 
+func (a *Account) Logoff() error { return aservice.Logoff(a) }
+
 /////////////////////////////////////////
 //                One
 /////////////////////////////////////////
