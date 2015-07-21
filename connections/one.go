@@ -58,9 +58,10 @@ func (room *ControlRoom) broadcast(msg []byte) {
 }
 
 // no ping
-func (room *ControlRoom) writePump() {
+func (room *ControlRoom) writePump(wait chan bool) {
 	defer func() {
 		room.Close()
+		wait <- true
 	}()
 	for {
 		select {
@@ -70,9 +71,9 @@ func (room *ControlRoom) writePump() {
 				return
 			}
 			if err := room.WriteMessage(websocket.TextMessage, msg); err != nil {
+				glog.Infoln("ws send err:", err, string(msg))
 				return
 			}
-			glog.Infoln("ws send ", string(msg))
 		}
 	}
 }
@@ -130,21 +131,25 @@ func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 			glog.Errorln(err)
 			return
 		}
-		defer ws.Close()
+		defer func() { ws.WriteMessage(websocket.CloseMessage, []byte{}) }()
 		handleOneCtrl(newControlRoom(h, ws))
 	}
 }
 
 func handleOneCtrl(room *ControlRoom) {
 	glog.Infoln("oneControlling start")
+	wait := make(chan bool)
+	go room.writePump(wait)
+	defer func() { <-wait }()
+
 	if !room.waitLogin() {
 		return
 	}
+	room.Send <- []byte(`{"name":"LoginAddrOk"}`)
 
 	room.Hub.reg <- room
 	defer func() { room.Hub.unreg <- room }()
 
-	go room.writePump()
 	room.readPump()
 }
 
