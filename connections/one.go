@@ -79,6 +79,7 @@ func (room *ControlRoom) writePump(wait chan bool) {
 }
 
 func (room *ControlRoom) readPump() {
+	defer room.Close()
 	for {
 		_, b, err := room.ReadMessage()
 		if err != nil {
@@ -91,17 +92,25 @@ func (room *ControlRoom) readPump() {
 			continue
 		}
 		raws := bytes.SplitN(b, []byte{':'}, 3)
+		room.onRead(raws[1], raws[2])
+	}
+}
 
-		switch string(raws[1]) {
-		case "Ipcams":
-			onOneIpcams(room, raws[2])
-		case "ResponseToMany":
-			onOneResponseToMany(room, raws[2])
-		case "ServerCommand":
-			onServerCommand(room, raws[2])
-		default:
-			glog.Errorln("Unknow command json:", string(b))
+func (room *ControlRoom) onRead(typ, content []byte) {
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Infoln("onRead", string(typ), string(content), err)
 		}
+	}()
+	switch string(typ) {
+	case "Ipcams":
+		onOneIpcams(room, content)
+	case "ResponseToMany":
+		onOneResponseToMany(room, content)
+	case "ServerCommand":
+		onServerCommand(room, content)
+	default:
+		glog.Errorln("Unknow command json:", string(typ), string(content))
 	}
 }
 
@@ -156,8 +165,6 @@ func handleOneCtrl(room *ControlRoom) {
 }
 
 func onOneResponseToMany(room *ControlRoom, infoWithTo []byte) {
-	// Ignore error if room/many closed
-	defer recover()
 	raws := bytes.SplitN(infoWithTo, []byte{':'}, 2)
 	to, err := strconv.Atoi(string(raws[0]))
 	if err != nil {
