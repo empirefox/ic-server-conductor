@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/dchest/uniuri"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
-	"github.com/jaytaylor/uuid"
 )
 
 const (
@@ -70,6 +70,5 @@ func GetNamedCmd(from uint, name, cmd string) []byte {
 }
 
 func NewUUID() string {
-	u5, _ := uuid.NewV5(uuid.NamespaceURL, []byte("ic-server-ws-signal"))
-	return u5.String()
+	return uniuri.NewLen(36)
 }

@@ -124,7 +124,11 @@ func (accountService) FindOne(o *One, addr []byte) error {
 	if err != nil {
 		return err
 	}
-	return DB.Model(o).Related(&o.Accounts, "Accounts").Error
+	err = DB.Model(o).Related(&o.Accounts, "Accounts").Error
+	if err == gorm.RecordNotFound {
+		return nil
+	}
+	return err
 }
 
 func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {

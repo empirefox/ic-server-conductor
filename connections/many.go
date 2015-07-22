@@ -327,14 +327,15 @@ func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data regRoomData
 		if err := c.Bind(&data); err != nil {
-			c.JSON(http.StatusBadRequest, err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": err, "content": data})
 			return
 		}
 
 		one := One{SecretAddress: NewUUID()}
 		one.Name = data.Name
 		if err := c.Keys[conf.UserGinKey].(*Oauth).Account.RegOne(&one); err != nil {
-			panic(err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err, "content": one})
+			return
 		}
 		c.JSON(http.StatusOK, gin.H{"addr": one.SecretAddress})
 	}

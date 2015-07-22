@@ -1,11 +1,15 @@
 package account
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 )
 
 type BaseModel struct {
+	ID          uint `gorm:"primary_key"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	Name        string `json:",omitempty" binding:"required" sql:"type:varchar(128);not null"`
 	Description string `json:",omitempty"                    sql:"type:varchar(128);default:''"`
 }
@@ -16,7 +20,7 @@ type BaseModel struct {
 
 //Provider:Google,Github,Qq,Weibo,Baidu,Souhu,Netease,Douban
 type Oauth struct {
-	gorm.Model
+	BaseModel
 	Account   Account `json:",omitempty"`
 	AccountId uint    `json:"-"`
 	Oid       string  `json:",omitempty" binding:"required" sql:"type:varchar(128);not null"`
@@ -37,7 +41,6 @@ func (o *Oauth) Valid() bool                      { return aservice.Valid(o) }
 /////////////////////////////////////////
 
 type Account struct {
-	gorm.Model
 	BaseModel
 	Oauths  []Oauth `json:",omitempty"`
 	Ones    []One   `json:",omitempty" gorm:"many2many:account_ones;"`
@@ -64,7 +67,6 @@ func (a *Account) Logoff() error { return aservice.Logoff(a) }
 
 // One must be added under an exist Account
 type One struct {
-	gorm.Model
 	BaseModel
 	SecretAddress string    `json:",omitempty" binding:"required" sql:"not null;type:varchar(128);unique"`
 	Enabled       bool      `json:",omitempty"                    sql:"default:true"`

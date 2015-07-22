@@ -5,14 +5,12 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
-	"github.com/jinzhu/gorm"
 	"golang.org/x/oauth2"
 
 	. "github.com/empirefox/gin-oauth2"
 )
 
 type OauthProvider struct {
-	gorm.Model
 	BaseModel
 	Path         string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	ClientID     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
@@ -20,7 +18,7 @@ type OauthProvider struct {
 	AuthURL      string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	TokenURL     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	RedirectURL  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	Scopes       string `json:",omitempty" binding:"required" sql:"type:varchar(255);default:''"`
+	Scopes       string `json:",omitempty"                    sql:"type:varchar(255);default:''"`
 	UserEndpoint string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	OidJsonPath  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	Enabled      bool   `json:",omitempty"                    sql:"default:true"`

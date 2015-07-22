@@ -97,6 +97,8 @@ func (room *ControlRoom) readPump() {
 			onOneIpcams(room, raws[2])
 		case "ResponseToMany":
 			onOneResponseToMany(room, raws[2])
+		case "ServerCommand":
+			onServerCommand(room, raws[2])
 		default:
 			glog.Errorln("Unknow command json:", string(b))
 		}
@@ -115,8 +117,7 @@ func (room *ControlRoom) waitLogin() (ok bool) {
 	}
 	one := &One{}
 	if err = one.Find(addrb[5:]); err != nil {
-		glog.Errorln(err)
-		room.Send <- []byte(`{"name":"LoginAddrError"}`)
+		glog.Errorln(err, string(addrb))
 		return
 	}
 	room.One = one
@@ -143,6 +144,7 @@ func handleOneCtrl(room *ControlRoom) {
 	defer func() { <-wait }()
 
 	if !room.waitLogin() {
+		room.Send <- []byte(`{"name":"LoginAddrError"}`)
 		return
 	}
 	room.Send <- []byte(`{"name":"LoginAddrOk"}`)
@@ -163,6 +165,22 @@ func onOneResponseToMany(room *ControlRoom, infoWithTo []byte) {
 		return
 	}
 	room.Participants[uint(to)].Send <- raws[1]
+}
+
+func onServerCommand(room *ControlRoom, command []byte) {
+	var cmd ServerCommand
+	if err := json.Unmarshal(command, &cmd); err != nil {
+		glog.Errorln(err)
+		return
+	}
+	glog.Infoln("cmd", cmd)
+	switch cmd.Name {
+	case "RemoveRoom":
+		if err := room.One.Owner.RemoveOne(room.One); err != nil {
+			glog.Errorln(err)
+		}
+		room.Send <- []byte(`{"name":"LoginAddrError"}`)
+	}
 }
 
 func onOneIpcams(room *ControlRoom, info []byte) {
