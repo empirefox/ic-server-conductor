@@ -269,7 +269,9 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	}
 }
 
+// to ic-one-client Center.Command
 type CreateSignalingConnectionCommand struct {
+	From    uint   `json:"from"`
 	Name    string `json:"name"`
 	Content string `json:"content"`
 }

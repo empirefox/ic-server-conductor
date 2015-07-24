@@ -20,7 +20,6 @@ const (
 // copy from client one
 type Ipcam struct {
 	Id     string `json:"id,omitempty"`
-	Name   string `json:"name,omitempty"`
 	Off    bool   `json:"off,omitempty"`
 	Online bool   `json:"online,omitempty"`
 }
