@@ -73,6 +73,7 @@ func (room *ControlRoom) writePump(wait chan bool) {
 				glog.Infoln("ws send err:", err, string(msg))
 				return
 			}
+			glog.Infoln("ws send to one:", string(msg))
 		}
 	}
 }
@@ -91,6 +92,10 @@ func (room *ControlRoom) readPump() {
 			continue
 		}
 		raws := bytes.SplitN(b, []byte{':'}, 3)
+		if len(raws) < 3 {
+			glog.Errorln("Not enough info in one message")
+			continue
+		}
 		room.onRead(raws[1], raws[2])
 	}
 }
@@ -164,7 +169,12 @@ func handleOneCtrl(room *ControlRoom) {
 }
 
 func onOneResponseToMany(room *ControlRoom, infoWithTo []byte) {
+	// [manyId]:[transfer]
 	raws := bytes.SplitN(infoWithTo, []byte{':'}, 2)
+	if len(raws) < 2 {
+		glog.Errorln("No transfer data from one")
+		return
+	}
 	to, err := strconv.Atoi(string(raws[0]))
 	if err != nil {
 		glog.Errorln(err)

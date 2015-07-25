@@ -117,7 +117,7 @@ func (conn *ManyControlConn) writePump() {
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				return
 			}
-			glog.Infoln("ws send ", string(msg))
+			glog.Infoln("ws send to many:", string(msg))
 		case <-ticker.C:
 			if err := conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
 				return
@@ -195,9 +195,8 @@ func onManyChat(many *ManyControlConn, bmsg []byte) {
 }
 
 func onManyCommand(many *ManyControlConn, bcmd []byte) {
-	cmd := EmptyCommand()
-	defer cmd.Free()
-	if err := json.Unmarshal(bcmd, cmd); err != nil {
+	cmd := ManyCommand{}
+	if err := json.Unmarshal(bcmd, &cmd); err != nil {
 		glog.Errorln(err)
 		return
 	}
@@ -212,7 +211,7 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 	case "ManageSetRoomName":
 		// Content: new_name
 		// Proccess in server
-		one.Name = cmd.Content
+		one.Name = string(cmd.Content)
 		if err := one.Save(); err != nil {
 			glog.Errorln(err)
 			many.Send <- GetTypedInfo("SetRoomName Error")
@@ -227,7 +226,7 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 			many.Send <- GetTypedInfo("Room not online")
 			return
 		}
-		room.Send <- GetNamedCmd(many.ID, cmd.Name, cmd.Content)
+		room.Send <- GetNamedCmd(many.ID, []byte(cmd.Name), cmd.Content)
 	default:
 		glog.Errorln("Unknow Command name:", cmd.Name)
 		many.Send <- GetTypedInfo("Unknow Command name:" + cmd.Name)
@@ -252,16 +251,23 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		glog.Infoln("many signaling coming")
 		res, reciever := preProccessSignaling(h, c)
+		if res == nil {
+			return
+		}
 		var resWs *websocket.Conn
 		select {
 		case resWs = <-res:
 		case <-time.After(time.Second * 15):
 			h.processFromWait(reciever)
-			panic("Wait for one signaling timeout")
+			glog.Infoln("Wait for one signaling timeout")
+			c.AbortWithStatus(http.StatusGatewayTimeout)
+			return
 		}
 		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
-			panic(err)
+			glog.Infoln("Upgrade failed:", err)
+			c.AbortWithStatus(http.StatusBadGateway)
+			return
 		}
 		defer ws.Close()
 		gws.Pipe(ws, resWs)
@@ -279,35 +285,44 @@ type CreateSignalingConnectionCommand struct {
 func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, reciever string) {
 	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 	if err != nil {
-		panic("No room set in context")
+		glog.Infoln("No room set in context:", err)
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
 	}
 	room, ok := h.rooms[uint(roomId)]
 	if !ok {
-		panic("Room not found in request")
+		glog.Infoln("Room not found in request")
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
 	}
 	cameras := room.Cameras
 	if cameras == nil {
-		panic("Cameras not found in room")
+		glog.Infoln("Cameras not found in room")
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
 	}
 	camera := c.Params.ByName("camera")
-	reciever = c.Params.ByName("reciever")
-	cmd := CreateSignalingConnectionCommand{
-		Name:    "CreateSignalingConnection",
-		Content: fmt.Sprintf(`{"camera":"%s","reciever":"%s"}`, camera, reciever),
-	}
 	_, ok = cameras[camera]
 	if !ok {
-		panic("Camera not found in room")
+		glog.Infoln("Camera not found in room")
+		c.AbortWithStatus(http.StatusNotFound)
+		return
 	}
-	cmdStr, err := json.Marshal(cmd)
-	if err != nil {
-		panic(err)
-	}
+	reciever = c.Params.ByName("reciever")
 	res, err = h.waitForProcess(reciever)
 	if err != nil {
-		panic(err)
+		glog.Infoln("Wait for process:", err)
+		c.AbortWithStatus(http.StatusBadGateway)
+		return
 	}
-	room.Send <- cmdStr
+	cmd := fmt.Sprintf(`{
+		"name":"CreateSignalingConnection",
+		"from":%d,
+		"content":{
+			"camera":"%s", "reciever":"%s"
+		}
+	}`, room.ID, camera, reciever)
+	room.Send <- []byte(cmd)
 	return res, reciever
 }
 

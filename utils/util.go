@@ -65,8 +65,8 @@ func GetTypedInfo(info string) []byte {
 	return GetTypedMsgStr("Info", info)
 }
 
-func GetNamedCmd(from uint, name, cmd string) []byte {
-	return []byte(fmt.Sprintf(`{"from":%d,"name":"%s","content":"%s"}`, from, name, cmd))
+func GetNamedCmd(from uint, name, cmd []byte) []byte {
+	return []byte(fmt.Sprintf(`{"from":%d,"name":"%s","content":%s}`, from, name, cmd))
 }
 
 func NewUUID() string {
