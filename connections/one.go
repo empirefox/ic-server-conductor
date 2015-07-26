@@ -58,6 +58,7 @@ func (room *ControlRoom) broadcast(msg []byte) {
 
 // no ping
 func (room *ControlRoom) writePump() {
+	defer func() { glog.Infoln("writePump close") }()
 	defer room.Close()
 	for {
 		select {
@@ -76,6 +77,7 @@ func (room *ControlRoom) writePump() {
 }
 
 func (room *ControlRoom) readPump() {
+	defer func() { glog.Infoln("readPump close") }()
 	defer room.Close()
 	for {
 		_, b, err := room.ReadMessage()
@@ -142,10 +144,12 @@ func (room *ControlRoom) onLogin(addr []byte) {
 	room.One = one
 	room.Hub.reg <- room
 	room.Send <- []byte(`{"name":"LoginAddrOk"}`)
+	glog.Infoln("one log ok")
 }
 
 func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		glog.Infoln("before ctrl upgrade")
 		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Errorln(err)
@@ -155,7 +159,10 @@ func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 		glog.Infoln("oneControlling start")
 
 		room := newControlRoom(h, ws)
-		defer func() { h.unreg <- room }()
+		defer func() {
+			glog.Infoln("unreg room")
+			h.unreg <- room
+		}()
 		go room.writePump()
 		room.readPump()
 	}
