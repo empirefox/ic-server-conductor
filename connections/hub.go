@@ -40,21 +40,26 @@ type Hub struct {
 
 func NewHub() *Hub {
 	return &Hub{
-		make(map[uint]*ControlRoom),
-		make(chan *Message),
-		make(chan *Command),
-		make(chan *ControlRoom),
-		make(chan *ControlRoom),
-		make(chan *ManyControlConn),
-		make(chan *ManyControlConn),
-		make(map[string]chan *websocket.Conn),
-		sync.Mutex{},
-		make(map[uint]codes),
-		sync.Mutex{},
+		rooms:         make(map[uint]*ControlRoom),
+		msg:           make(chan *Message, 64),
+		cmd:           make(chan *Command, 64),
+		reg:           make(chan *ControlRoom, 64),
+		unreg:         make(chan *ControlRoom, 64),
+		join:          make(chan *ManyControlConn, 64),
+		leave:         make(chan *ManyControlConn, 64),
+		sigResWaitMap: make(map[string]chan *websocket.Conn),
+		sigResMutex:   sync.Mutex{},
+		inviteCodes:   make(map[uint]codes),
+		inviteMutex:   sync.Mutex{},
 	}
 }
 
 func (h *Hub) Run() {
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+	}()
 	for {
 		select {
 		case msg := <-h.msg:
@@ -78,6 +83,9 @@ func (h *Hub) onReg(room *ControlRoom) {
 }
 
 func (h *Hub) onUnreg(room *ControlRoom) {
+	if room.One == nil {
+		return
+	}
 	if room, ok := h.rooms[room.ID]; ok {
 		delete(h.rooms, room.ID)
 	}
@@ -125,6 +133,9 @@ func (h *Hub) onJoin(many *ManyControlConn) {
 }
 
 func (h *Hub) onLeave(many *ManyControlConn) {
+	if many.Oauth == nil {
+		return
+	}
 	for _, one := range many.Account.Ones {
 		room, ok := h.rooms[one.ID]
 		if !ok {

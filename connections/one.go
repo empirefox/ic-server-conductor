@@ -57,11 +57,8 @@ func (room *ControlRoom) broadcast(msg []byte) {
 }
 
 // no ping
-func (room *ControlRoom) writePump(wait chan bool) {
-	defer func() {
-		room.Close()
-		wait <- true
-	}()
+func (room *ControlRoom) writePump() {
+	defer room.Close()
 	for {
 		select {
 		case msg, ok := <-room.Send:
@@ -103,9 +100,17 @@ func (room *ControlRoom) readPump() {
 func (room *ControlRoom) onRead(typ, content []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			glog.Infoln("onRead", string(typ), string(content), err)
+			glog.Infof("read from one, authed:%t, type:%s, content:%s, err:%v\n", typ, content, err)
 		}
 	}()
+	if room.One != nil {
+		room.onReadAuthed(typ, content)
+	} else {
+		room.onReadNotAuthed(typ, content)
+	}
+}
+
+func (room *ControlRoom) onReadAuthed(typ, content []byte) {
 	switch string(typ) {
 	case "Ipcams":
 		onOneIpcams(room, content)
@@ -118,24 +123,25 @@ func (room *ControlRoom) onRead(typ, content []byte) {
 	}
 }
 
-func (room *ControlRoom) waitLogin() (ok bool) {
-	_, addrb, err := room.ReadMessage()
-	if err != nil {
-		glog.Errorln(err)
-		return
+func (room *ControlRoom) onReadNotAuthed(typ, content []byte) {
+	switch string(typ) {
+	case "Login":
+		room.onLogin(content)
+	default:
+		glog.Errorln("Unknow command json:", string(typ), string(content))
 	}
-	if !bytes.HasPrefix(addrb, []byte("addr:")) {
-		glog.Errorln("Wrong addr from one")
-		return
-	}
+}
+
+func (room *ControlRoom) onLogin(addr []byte) {
 	one := &One{}
-	if err = one.Find(addrb[5:]); err != nil {
-		glog.Errorln(err, string(addrb))
+	if err := one.Find(addr); err != nil {
+		glog.Errorln(err, string(addr))
+		room.Send <- []byte(`{"name":"LoginAddrError"}`)
 		return
 	}
 	room.One = one
-	ok = true
-	return
+	room.Hub.reg <- room
+	room.Send <- []byte(`{"name":"LoginAddrOk"}`)
 }
 
 func HandleOneCtrl(h *Hub) gin.HandlerFunc {
@@ -145,27 +151,14 @@ func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 			glog.Errorln(err)
 			return
 		}
-		defer func() { ws.WriteMessage(websocket.CloseMessage, []byte{}) }()
-		handleOneCtrl(newControlRoom(h, ws))
+		defer ws.Close()
+		glog.Infoln("oneControlling start")
+
+		room := newControlRoom(h, ws)
+		defer func() { h.unreg <- room }()
+		go room.writePump()
+		room.readPump()
 	}
-}
-
-func handleOneCtrl(room *ControlRoom) {
-	glog.Infoln("oneControlling start")
-	wait := make(chan bool)
-	go room.writePump(wait)
-	defer func() { <-wait }()
-
-	if !room.waitLogin() {
-		room.Send <- []byte(`{"name":"LoginAddrError"}`)
-		return
-	}
-	room.Send <- []byte(`{"name":"LoginAddrOk"}`)
-
-	room.Hub.reg <- room
-	defer func() { room.Hub.unreg <- room }()
-
-	room.readPump()
 }
 
 func onOneResponseToMany(room *ControlRoom, infoWithTo []byte) {
@@ -205,6 +198,7 @@ func onOneIpcams(room *ControlRoom, info []byte) {
 		glog.Errorln(err)
 		return
 	}
+	glog.Infoln(ipcams)
 	room.Cameras = ipcams
 	for _, ctrl := range room.Participants {
 		ctrl.sendCameraList()

@@ -85,7 +85,6 @@ func (o *One) Save() error                        { return aservice.Save(o) }
 
 // Used for adding cascade
 type AccountOne struct {
-	ID        uint `gorm:"primary_key"`
-	AccountId uint
-	OneId     uint
+	AccountId uint `gorm:"primary_key"`
+	OneId     uint `gorm:"primary_key"`
 }

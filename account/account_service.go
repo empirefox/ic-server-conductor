@@ -149,7 +149,7 @@ func (accountService) OnOid(o *Oauth, provider, oid string) error {
 	if err != nil {
 		return err
 	}
-	err = DB.Model(&o.Account).Related(&o.Account.Ones, "Ones").Error
+	err = DB.Model(&o.Account).Association("Ones").Find(&o.Account.Ones).Error
 	if err == gorm.RecordNotFound {
 		return nil
 	}
