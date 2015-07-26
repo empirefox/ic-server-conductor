@@ -4,6 +4,8 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -25,6 +27,13 @@ var (
 	Upgrader = websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
+		CheckOrigin: func(r *http.Request) bool {
+			u, err := url.Parse(r.Header["Origin"][0])
+			if err != nil {
+				return false
+			}
+			return u.Host == r.Host || u.Host == r.Host+":8443"
+		},
 	}
 
 	Dailer = websocket.Dialer{
