@@ -1,6 +1,8 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
@@ -22,6 +24,13 @@ type Server struct {
 	ValidateGets map[string]string
 }
 
+func (s *Server) SecureWs(c *gin.Context) {
+	if strings.EqualFold(c.Request.URL.Scheme, "ws") {
+		c.Abort()
+		return
+	}
+}
+
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	router := gin.Default()
@@ -30,10 +39,15 @@ func (s *Server) Run() error {
 	router.Use(goauth.Setup(s.OauthConfig))
 
 	router.Use(secure.Secure(secure.Options{
-		SSLRedirect:     true,
-		SSLProxyHeaders: map[string]string{"X-Forwarded-Proto": "https"},
-		IsDevelopment:   s.IsDevMode,
+		SSLRedirect: true,
+		SSLProxyHeaders: map[string]string{
+			"X-Forwarded-Proto": "https",
+			"Upgrade":           "websocket",
+		},
+		IsDevelopment: s.IsDevMode,
 	}))
+
+	router.Use(s.SecureWs)
 
 	router.Use(static.Serve("/", static.LocalFile(utils.GetStaticDir("public"), true)))
 	// peer from MANY client
