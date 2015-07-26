@@ -28,7 +28,12 @@ var (
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
-			u, err := url.Parse(r.Header["Origin"][0])
+			origin := r.Header["Origin"]
+			if len(origin) == 0 {
+				return true
+			}
+			u, err := url.Parse(origin[0])
+			glog.Infoln(u.Host, r.Host)
 			if err != nil {
 				return false
 			}
