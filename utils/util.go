@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dchest/uniuri"
@@ -37,7 +38,7 @@ var (
 			if err != nil {
 				return false
 			}
-			return u.Host == r.Host || u.Host == r.Host+":8443"
+			return u.Host == r.Host || strings.HasSuffix(u.Host, ".luck2.me")
 		},
 	}
 
