@@ -34,6 +34,7 @@ type AccountService interface {
 	Permitted(o *Oauth, c *gin.Context) bool
 	Valid(o *Oauth) bool
 
+	GetOnes(a *Account) error
 	RegOne(a *Account, o *One) error
 	ViewOne(a *Account, o *One) error
 	RemoveOne(a *Account, o *One) error
@@ -77,6 +78,10 @@ func (accountService) SaveOauthProvider(op *OauthProvider) error {
 
 func (accountService) Logoff(a *Account) error {
 	return DB.Unscoped().Delete(a).Error
+}
+
+func (accountService) GetOnes(a *Account) error {
+	return DB.Model(a).Association("Ones").Find(&a.Ones).Error
 }
 
 // one must be non-exist record
@@ -146,13 +151,6 @@ func (accountService) OnOid(o *Oauth, provider, oid string) error {
 	err := DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
 		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
-	if err != nil {
-		return err
-	}
-	err = DB.Model(&o.Account).Association("Ones").Find(&o.Account.Ones).Error
-	if err == gorm.RecordNotFound {
-		return nil
-	}
 	return err
 }
 

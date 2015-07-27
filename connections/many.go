@@ -66,6 +66,9 @@ type CameraList struct {
 }
 
 func (conn *ManyControlConn) genCameraList() ([]byte, error) {
+	if err := conn.GetOnes(); err != nil {
+		return nil, err
+	}
 	list := CameraList{
 		Type:  "CameraList",
 		Rooms: make([]CameraRoom, 0),

@@ -35,6 +35,7 @@ type Oauth struct {
 func (o *Oauth) OnOid(provider, oid string) error { return aservice.OnOid(o, provider, oid) }
 func (o *Oauth) Permitted(c *gin.Context) bool    { return aservice.Permitted(o, c) }
 func (o *Oauth) Valid() bool                      { return aservice.Valid(o) }
+func (o *Oauth) GetOnes() error                   { return o.Account.GetOnes() }
 
 /////////////////////////////////////////
 //                Account
@@ -46,6 +47,8 @@ type Account struct {
 	Ones    []One   `json:",omitempty" gorm:"many2many:account_ones;"`
 	Enabled bool    `json:",omitempty" sql:"default:true"`
 }
+
+func (a *Account) GetOnes() error { return aservice.GetOnes(a) }
 
 // one must be non-exist record
 // a   must be from Oauth.OnOid

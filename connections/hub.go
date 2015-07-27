@@ -119,6 +119,9 @@ func (h *Hub) onCmd(cmd *Command) {
 }
 
 func (h *Hub) onJoin(many *ManyControlConn) {
+	if err := many.GetOnes(); err != nil {
+		return
+	}
 	for _, one := range many.Account.Ones {
 		room, ok := h.rooms[one.ID]
 		if !ok {
@@ -134,6 +137,9 @@ func (h *Hub) onJoin(many *ManyControlConn) {
 
 func (h *Hub) onLeave(many *ManyControlConn) {
 	if many.Oauth == nil {
+		return
+	}
+	if err := many.GetOnes(); err != nil {
 		return
 	}
 	for _, one := range many.Account.Ones {
