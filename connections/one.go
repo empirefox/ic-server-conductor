@@ -58,7 +58,12 @@ func (room *ControlRoom) broadcast(msg []byte) {
 
 // no ping
 func (room *ControlRoom) writePump() {
-	defer room.Close()
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
+		room.Close()
+	}()
 	for {
 		select {
 		case msg, ok := <-room.Send:

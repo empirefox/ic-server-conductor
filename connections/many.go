@@ -104,6 +104,9 @@ func (conn *ManyControlConn) sendCameraList() {
 func (conn *ManyControlConn) writePump() {
 	ticker := time.NewTicker(PingPeriod)
 	defer func() {
+		if err := recover(); err != nil {
+			glog.Errorln(err)
+		}
 		ticker.Stop()
 		conn.Close()
 	}()
@@ -217,8 +220,11 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 			many.Send <- GetTypedInfo("SetRoomName Error")
 			return
 		}
-		many.sendCameraList()
-	case "ManageGetIpcam", "ManageSetIpcam", "ManageReconnectIpcam":
+		many.Send <- []byte(fmt.Sprintf(`{
+			"type":"ManageSetRoomName",
+			"content":{"name":"%s"}
+		}`, one.Name))
+	case "ManageGetIpcam", "ManageSetIpcam", "ManageDelIpcam", "ManageReconnectIpcam":
 		// Content(string): ipcam_id/ipcam/ipcam_id
 		// Pass to One
 		room, ok := many.Hub.rooms[cmd.Room]

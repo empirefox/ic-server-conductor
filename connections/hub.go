@@ -182,6 +182,9 @@ func (cs codes) genCode() (string, chan bool) {
 }
 
 func (h *Hub) waitForStop(cs codes, code string, stop chan bool) {
+	if err := recover(); err != nil {
+		glog.Errorln(err)
+	}
 	select {
 	case <-stop:
 	case <-time.After(time.Minute * 10):
