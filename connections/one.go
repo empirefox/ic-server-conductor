@@ -3,6 +3,7 @@ package connections
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
@@ -50,8 +51,7 @@ func (room *ControlRoom) broadcast(msg []byte) {
 		select {
 		case ctrl.Send <- msg:
 		default:
-			room.Close()
-			room.Hub.onLeave(ctrl)
+			ctrl.Close()
 		}
 	}
 }
@@ -161,6 +161,9 @@ func HandleOneCtrl(h *Hub) gin.HandlerFunc {
 		room := newControlRoom(h, ws)
 		defer func() {
 			h.unreg <- room
+			room.broadcast([]byte(fmt.Sprintf(`{
+				"type":"RoomOffline","content":%d
+			}`, room.ID)))
 		}()
 		go room.writePump()
 		room.readPump()
