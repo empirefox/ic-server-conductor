@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 
 	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
@@ -26,6 +27,7 @@ type Server struct {
 
 func (s *Server) SecureWs(c *gin.Context) {
 	if strings.EqualFold(c.Request.URL.Scheme, "ws") {
+		glog.Infoln("insecure:", *c.Request.URL)
 		c.Abort()
 		return
 	}
