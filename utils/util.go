@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dchest/uniuri"
+	"github.com/empirefox/gotool/paas"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )
@@ -34,11 +35,11 @@ var (
 				return true
 			}
 			u, err := url.Parse(origin[0])
-			glog.Infoln(u.Host, r.Host)
 			if err != nil {
+				glog.Infoln(u.Host, r.Host)
 				return false
 			}
-			return u.Host == r.Host || strings.HasSuffix(u.Host, ".luck2.me")
+			return u.Host == r.Host || u.Host == paas.SubDomain || strings.HasSuffix(u.Host, ".luck2.me")
 		},
 	}
 

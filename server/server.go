@@ -59,7 +59,8 @@ func (s *Server) Run() error {
 			ModuleName: "app.constants.system",
 			Name:       "SystemData",
 			Instance: map[string]interface{}{
-				"DevProd": dp.Mode,
+				"DevProd":   dp.Mode,
+				"SubDomain": paas.SubDomain,
 			},
 		})
 	})
