@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
@@ -74,18 +75,18 @@ func (conn *ManyControlConn) genCameraList() ([]byte, error) {
 		Rooms: make([]CameraRoom, 0),
 	}
 	for _, one := range conn.Account.Ones {
+		r := CameraRoom{
+			Id:      one.ID,
+			Name:    one.Name,
+			IsOwner: one.OwnerId == conn.Account.ID,
+			Cameras: make([]Ipcam, 0),
+		}
 		if room, ok := conn.Hub.rooms[one.ID]; ok {
-			r := CameraRoom{
-				Id:      one.ID,
-				Name:    one.Name,
-				IsOwner: one.OwnerId == conn.Account.ID,
-				Cameras: make([]Ipcam, 0),
-			}
 			for _, ipcam := range room.Cameras {
 				r.Cameras = append(r.Cameras, ipcam)
 			}
-			list.Rooms = append(list.Rooms, r)
 		}
+		list.Rooms = append(list.Rooms, r)
 	}
 	cameraList, err := json.Marshal(list)
 	if err != nil {
@@ -146,18 +147,75 @@ func (conn *ManyControlConn) readPump() {
 		}
 		// many:Chat:{"":""}
 		raws := bytes.SplitN(b, []byte{':'}, 3)
-
-		switch string(raws[1]) {
-		case "Chat":
-			onManyChat(conn, raws[2])
-		case "Command":
-			onManyCommand(conn, raws[2])
-		case "GetManyData":
-			onManyGetData(conn, raws[2])
-		default:
-			glog.Errorln("Unknow command json:", string(b))
-		}
+		conn.onRead(raws[1], raws[2])
 	}
+}
+
+func (conn *ManyControlConn) onRead(typ, content []byte) {
+	defer func() {
+		if err := recover(); err != nil {
+			glog.Infof("read from many, authed:%t, type:%s, content:%s, err:%v\n", typ, content, err)
+		}
+	}()
+	if conn.Oauth != nil {
+		conn.onReadAuthed(typ, content)
+	} else {
+		conn.onReadNotAuthed(typ, content)
+	}
+}
+
+func (conn *ManyControlConn) onReadAuthed(typ, content []byte) {
+	switch string(typ) {
+	case "Chat":
+		onManyChat(conn, content)
+	case "Command":
+		onManyCommand(conn, content)
+	case "GetManyData":
+		onManyGetData(conn, content)
+	default:
+		glog.Errorln("Unknow authed:", string(typ), string(content))
+	}
+}
+
+func (conn *ManyControlConn) onReadNotAuthed(typ, content []byte) {
+	switch string(typ) {
+	case "Login":
+		conn.onLogin(content)
+	default:
+		glog.Errorln("Unknow unauthed:", string(typ), string(content))
+	}
+}
+
+func (conn *ManyControlConn) onLogin(tokenBytes []byte) {
+	token, err := jwt.Parse(string(tokenBytes), func(token *jwt.Token) (interface{}, error) {
+		// Don't forget to validate the alg is what you expect:
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+		}
+		return conn.Hub.tokenSecret, nil
+	})
+
+	if err != nil {
+		glog.Infoln("Parse token:", err)
+		conn.Close()
+		return
+	}
+	if !token.Valid {
+		glog.Infoln("Token is not valid")
+		conn.Close()
+		return
+	}
+	o := &Oauth{}
+	oa := []byte(token.Claims["oauth"].(string))
+	err = json.Unmarshal(oa, o)
+	if err != nil {
+		glog.Infoln("Unmarshal err:", err)
+		conn.Close()
+		return
+	}
+	conn.Oauth = o
+	conn.Hub.join <- conn
+	conn.Send <- []byte(`{"type":"Login","content":1}`)
 }
 
 func HandleManyCtrl(h *Hub) gin.HandlerFunc {
@@ -169,9 +227,6 @@ func HandleManyCtrl(h *Hub) gin.HandlerFunc {
 		}
 		defer ws.Close()
 		conn := newManyControlConn(h, ws)
-		if !conn.getOauth(c) {
-			return
-		}
 		handleManyCtrl(conn)
 	}
 }
@@ -180,7 +235,6 @@ func HandleManyCtrl(h *Hub) gin.HandlerFunc {
 func handleManyCtrl(conn *ManyControlConn) {
 	glog.Infoln("oneControlling start")
 
-	conn.Hub.join <- conn
 	defer func() { conn.Hub.leave <- conn }()
 
 	go conn.writePump()
@@ -235,7 +289,7 @@ func onManyCommand(many *ManyControlConn, bcmd []byte) {
 			many.Send <- GetTypedInfo("Room not online")
 			return
 		}
-		room.Send <- GetNamedCmd(many.ID, []byte(cmd.Name), cmd.Content)
+		room.Send <- GetNamedCmd(many.Account.ID, []byte(cmd.Name), cmd.Content)
 	default:
 		glog.Errorln("Unknow Command name:", cmd.Name)
 		many.Send <- GetTypedInfo("Unknow Command name:" + cmd.Name)
@@ -379,5 +433,26 @@ func HandleManyLogoff(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 			return
 		}
 		c.Redirect(http.StatusSeeOther, conf.PathLogout)
+	}
+}
+
+func HandleManyToken(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		oa, err := json.Marshal(c.Keys[conf.UserGinKey].(*Oauth))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err, "content": "Marshal user error"})
+			return
+		}
+		token := jwt.New(jwt.SigningMethodHS256)
+		// Set some claims
+		token.Claims["oauth"] = string(oa)
+		token.Claims["exp"] = time.Now().Add(time.Second * 50).Unix()
+		// Sign and get the complete encoded token as a string
+		tokenString, err := token.SignedString(h.tokenSecret)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "content": "Cannot gen token"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"token": tokenString})
 	}
 }

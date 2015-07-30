@@ -43,6 +43,7 @@ type AccountService interface {
 	FindOne(o *One, addr []byte) error
 	FindOneIfOwner(o *One, id, ownerId uint) error
 	Save(o *One) error
+	Viewers(o *One) error
 }
 
 func NewAccountService() AccountService {
@@ -145,6 +146,10 @@ func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {
 
 func (accountService) Save(o *One) error {
 	return DB.Save(o).Error
+}
+
+func (accountService) Viewers(o *One) error {
+	return DB.Model(o).Association("Accounts").Find(&o.Accounts).Error
 }
 
 func (accountService) OnOid(o *Oauth, provider, oid string) error {

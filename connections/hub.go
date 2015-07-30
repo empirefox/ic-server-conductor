@@ -26,6 +26,7 @@ type ResponseToMany struct {
 
 type Hub struct {
 	rooms         map[uint]*ControlRoom
+	clients       map[uint]*ManyControlConn
 	msg           chan *Message
 	cmd           chan *Command
 	reg           chan *ControlRoom
@@ -36,11 +37,13 @@ type Hub struct {
 	sigResMutex   sync.Mutex
 	inviteCodes   map[uint]codes
 	inviteMutex   sync.Mutex
+	tokenSecret   []byte
 }
 
 func NewHub() *Hub {
 	return &Hub{
 		rooms:         make(map[uint]*ControlRoom),
+		clients:       make(map[uint]*ManyControlConn),
 		msg:           make(chan *Message, 64),
 		cmd:           make(chan *Command, 64),
 		reg:           make(chan *ControlRoom, 64),
@@ -51,6 +54,7 @@ func NewHub() *Hub {
 		sigResMutex:   sync.Mutex{},
 		inviteCodes:   make(map[uint]codes),
 		inviteMutex:   sync.Mutex{},
+		tokenSecret:   []byte(uniuri.New()),
 	}
 }
 
@@ -80,6 +84,15 @@ func (h *Hub) Run() {
 
 func (h *Hub) onReg(room *ControlRoom) {
 	h.rooms[room.ID] = room
+	if err := room.Viewers(); err != nil {
+		glog.Infoln("Viewers err:", err)
+		return
+	}
+	for _, user := range room.Accounts {
+		if many, ok := h.clients[user.ID]; ok {
+			room.Participants[user.ID] = many
+		}
+	}
 }
 
 func (h *Hub) onUnreg(room *ControlRoom) {
@@ -119,6 +132,7 @@ func (h *Hub) onCmd(cmd *Command) {
 }
 
 func (h *Hub) onJoin(many *ManyControlConn) {
+	h.clients[many.Account.ID] = many
 	if err := many.GetOnes(); err != nil {
 		return
 	}
@@ -128,16 +142,16 @@ func (h *Hub) onJoin(many *ManyControlConn) {
 			glog.Errorln("Room not found in command")
 			continue
 		}
-		if old, ok := room.Participants[many.ID]; ok {
-			old.Close()
-		}
-		room.Participants[many.ID] = many
+		room.Participants[many.Account.ID] = many
 	}
 }
 
 func (h *Hub) onLeave(many *ManyControlConn) {
 	if many.Oauth == nil {
 		return
+	}
+	if _, ok := h.clients[many.Account.ID]; ok {
+		delete(h.clients, many.Account.ID)
 	}
 	if err := many.GetOnes(); err != nil {
 		return
@@ -148,8 +162,8 @@ func (h *Hub) onLeave(many *ManyControlConn) {
 			glog.Errorln("Room not found in command")
 			return
 		}
-		if _, ok := room.Participants[many.ID]; ok {
-			delete(room.Participants, many.ID)
+		if _, ok := room.Participants[many.Account.ID]; ok {
+			delete(room.Participants, many.Account.ID)
 		}
 	}
 }

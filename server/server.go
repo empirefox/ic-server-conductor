@@ -83,11 +83,12 @@ func (s *Server) Run() error {
 	// websocket
 	// peer from MANY client
 	many := router.Group("/many")
-	many.GET("/ctrl", s.OauthConfig.Check(goauth.Permitted), HandleManyCtrl(s.Hub))
+	many.GET("/ctrl", HandleManyCtrl(s.Hub))
 	many.GET("/signaling/:room/:camera/:reciever", HandleManySignaling(s.Hub))
 
 	// rest
 	many.GET("/checklogin", HandleManyCheckLogin(s.OauthConfig))
+	many.GET("/ws-token", s.OauthConfig.Check(goauth.Permitted), HandleManyToken(s.Hub, s.OauthConfig))
 	many.GET("/logoff", s.OauthConfig.Check(goauth.Permitted), HandleManyLogoff(s.Hub, s.OauthConfig))
 	many.POST("/reg-room", s.OauthConfig.Check(goauth.Permitted), HandleManyRegRoom(s.Hub, s.OauthConfig))
 	many.GET("/invite-code/:room", s.OauthConfig.Check(goauth.Permitted), invite.HandleManyGetInviteCode(s.Hub, s.OauthConfig))
