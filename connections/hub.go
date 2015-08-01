@@ -105,7 +105,6 @@ func (h *Hub) onUnreg(room *ControlRoom) {
 }
 
 func (h *Hub) onMsg(msg *Message) {
-	defer msg.Free()
 	msgStr, err := GetTypedMsg("Chat", msg)
 	if err != nil {
 		glog.Errorln(err)
@@ -117,7 +116,6 @@ func (h *Hub) onMsg(msg *Message) {
 }
 
 func (h *Hub) onCmd(cmd *Command) {
-	defer cmd.Free()
 	room, ok := h.rooms[cmd.Room]
 	if !ok {
 		glog.Errorln("Room not found in command")

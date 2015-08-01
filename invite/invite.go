@@ -7,20 +7,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 
-	"github.com/empirefox/gin-oauth2"
-	"github.com/empirefox/gotool/web"
 	. "github.com/empirefox/ic-server-ws-signal/account"
 	. "github.com/empirefox/ic-server-ws-signal/connections"
 )
 
-func HandleManyGetInviteCode(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+func HandleManyGetInviteCode(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 		if err != nil {
 			glog.Infoln("No room set in context:", err)
 			return
 		}
-		user := c.Keys[conf.UserGinKey].(*Oauth).Account
+		user := c.Keys[UserKey].(*Oauth).Account
 		one := &One{}
 		if err := one.FindIfOwner(uint(roomId), user.ID); err != nil {
 			glog.Infoln("Not the owner of the room:", err)
@@ -33,7 +31,7 @@ func HandleManyGetInviteCode(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 	}
 }
 
-func onManyInvite(h *Hub, conf *goauth.Config, c *gin.Context) (ok bool) {
+func onManyInvite(h *Hub, c *gin.Context) (ok bool) {
 	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 	if err != nil {
 		glog.Infoln("No room set in context:", err)
@@ -49,7 +47,7 @@ func onManyInvite(h *Hub, conf *goauth.Config, c *gin.Context) (ok bool) {
 		glog.Infoln("Room not found:", err)
 		return
 	}
-	user := c.Keys[conf.UserGinKey].(*Oauth).Account
+	user := c.Keys[UserKey].(*Oauth).Account
 	if one.OwnerId == user.ID {
 		glog.Infoln("Cannot invite to your own room:", err)
 		return
@@ -61,21 +59,12 @@ func onManyInvite(h *Hub, conf *goauth.Config, c *gin.Context) (ok bool) {
 	return true
 }
 
-func HandleManyOnInvite(h *Hub, conf *goauth.Config, failed string) gin.HandlerFunc {
+func HandleManyOnInvite(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		acceptJson := web.AcceptJson(c.Request)
-		if onManyInvite(h, conf, c) {
-			if acceptJson {
-				c.JSON(http.StatusOK, "")
-				return
-			}
-			c.Redirect(http.StatusSeeOther, conf.PathSuccess)
+		if onManyInvite(h, c) {
+			c.JSON(http.StatusOK, "")
 			return
 		}
-		if acceptJson {
-			c.JSON(http.StatusBadRequest, "")
-			return
-		}
-		c.Redirect(http.StatusSeeOther, failed)
+		c.JSON(http.StatusBadRequest, "")
 	}
 }

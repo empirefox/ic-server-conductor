@@ -26,12 +26,15 @@ const (
 )
 
 var (
+	MainServer = os.Getenv("MAIN_SERVER")
+
 	Upgrader = websocket.Upgrader{
 		ReadBufferSize:  4096,
 		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
+			// https://xxx.xxx.com
 			origin := r.Header["Origin"]
-			if len(origin) == 0 {
+			if len(origin) == 0 || origin[0] == MainServer {
 				return true
 			}
 			u, err := url.Parse(origin[0])
@@ -88,3 +91,6 @@ func GetNamedCmd(from uint, name, cmd []byte) []byte {
 func NewUUID() string {
 	return uniuri.NewLen(36)
 }
+
+func OK(m string) []byte    { return []byte(fmt.Sprintf(`{"content":"%s"}`, m)) }
+func Err(err string) []byte { return []byte(fmt.Sprintf(`{"error":1,"content":"%s"}`, err)) }

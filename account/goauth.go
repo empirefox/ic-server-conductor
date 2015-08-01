@@ -54,9 +54,15 @@ type PageOauth struct {
 	Css  string `json:"css,omitempty"`
 }
 
+type OauthProviders []OauthProvider
+
+func (ops *OauthProviders) All() error {
+	return aservice.FindOauthProviders(ops)
+}
+
 func findProviders() (map[string]Provider, []PageOauth) {
-	var ops []OauthProvider
-	if err := aservice.FindOauthProviders(&ops); err != nil {
+	var ops OauthProviders
+	if err := ops.All(); err != nil {
 		glog.Errorln(err)
 	}
 	ps := make(map[string]Provider, len(ops))

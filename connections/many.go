@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -13,14 +12,13 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	"github.com/empirefox/gin-oauth2"
 	gws "github.com/empirefox/gotool/ws"
 	. "github.com/empirefox/ic-server-ws-signal/account"
 	. "github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 const (
-	GinKeyUser = "user"
+	UserKey = "user"
 )
 
 type ManyControlConn struct {
@@ -40,7 +38,7 @@ func newManyControlConn(h *Hub, ws *websocket.Conn) *ManyControlConn {
 }
 
 func (conn *ManyControlConn) getOauth(c *gin.Context) bool {
-	iuser, ok := c.Get(GinKeyUser)
+	iuser, ok := c.Get(UserKey)
 	if !ok {
 		glog.Infoln("user not found")
 		return false
@@ -218,7 +216,21 @@ func (conn *ManyControlConn) onLogin(tokenBytes []byte) {
 	conn.Send <- []byte(`{"type":"Login","content":1}`)
 }
 
-func HandleManyCtrl(h *Hub) gin.HandlerFunc {
+func AuthMws(conn Connection, secret interface{}) (*Oauth, error) {
+	token, err := AuthWs(conn, secret)
+	if err != nil {
+		conn.WriteMessage(websocket.TextMessage, `{"type":"Info","content":"Auth token failed"}`)
+		return nil, err
+	}
+	o := &Oauth{}
+	if err = o.FromToken(token); err != nil {
+		conn.WriteMessage(websocket.TextMessage, `{"type":"Info","content":"Auth failed"}`)
+		return nil, err
+	}
+	return o, nil
+}
+
+func HandleManyCtrl(h *Hub, secret interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -226,15 +238,19 @@ func HandleManyCtrl(h *Hub) gin.HandlerFunc {
 			return
 		}
 		defer ws.Close()
+		o, err := AuthMws(ws, secret)
+		if err != nil {
+			return
+		}
 		conn := newManyControlConn(h, ws)
+		conn.Oauth = o
 		handleManyCtrl(conn)
 	}
 }
 
 // TODO next add manage api
 func handleManyCtrl(conn *ManyControlConn) {
-	glog.Infoln("oneControlling start")
-
+	conn.Hub.join <- conn
 	defer func() { conn.Hub.leave <- conn }()
 
 	go conn.writePump()
@@ -244,10 +260,9 @@ func handleManyCtrl(conn *ManyControlConn) {
 // on many control message
 
 func onManyChat(many *ManyControlConn, bmsg []byte) {
-	msg := EmptyMessage()
+	msg := &Message{}
 	if err := json.Unmarshal(bmsg, msg); err != nil {
 		glog.Errorln(err)
-		msg.Free()
 		return
 	}
 	msg.From = many.Account.Name
@@ -308,24 +323,15 @@ func onManyGetData(many *ManyControlConn, name []byte) {
 	}
 }
 
-// many signaling
+type StartSignalingInfo struct {
+	Room     uint   `json:"room"`
+	Camera   string `json:"camera"`
+	Reciever string `json:"reciever"`
+}
 
+// many signaling
 func HandleManySignaling(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		glog.Infoln("many signaling coming")
-		res, reciever := preProccessSignaling(h, c)
-		if res == nil {
-			return
-		}
-		var resWs *websocket.Conn
-		select {
-		case resWs = <-res:
-		case <-time.After(time.Second * 15):
-			h.processFromWait(reciever)
-			glog.Infoln("Wait for one signaling timeout")
-			c.AbortWithStatus(http.StatusGatewayTimeout)
-			return
-		}
 		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Infoln("Upgrade failed:", err)
@@ -333,50 +339,61 @@ func HandleManySignaling(h *Hub) gin.HandlerFunc {
 			return
 		}
 		defer ws.Close()
+		_, err := AuthMws(ws, secret)
+		if err != nil {
+			return
+		}
+
+		ws.WriteMessage(websocket.TextMessage, `{"type":"accepted"}`)
+		_, startInfo, err := ws.ReadMessage()
+		if err != nil {
+			glog.Infoln("Read start info err:", err)
+			return
+		}
+
+		var info StartSignalingInfo
+		if err := json.Unmarshal(startInfo, &info); err != nil {
+			glog.Infoln("Unmarshal info err:", err)
+			return
+		}
+
+		res := preProccessSignaling(h, c, &info)
+		if res == nil {
+			return
+		}
+		var resWs *websocket.Conn
+		select {
+		case resWs = <-res:
+		case <-time.After(time.Second * 15):
+			h.processFromWait(info.Reciever)
+			glog.Infoln("Wait for one signaling timeout")
+			return
+		}
 		gws.Pipe(ws, resWs)
 		res <- nil
 	}
 }
 
-// to ic-one-client Center.Command
-type CreateSignalingConnectionCommand struct {
-	From    uint   `json:"from"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-}
-
-func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, reciever string) {
-	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
-	if err != nil {
-		glog.Infoln("No room set in context:", err)
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
-	}
-	room, ok := h.rooms[uint(roomId)]
+func preProccessSignaling(h *Hub, c *gin.Context, info *StartSignalingInfo) chan *websocket.Conn {
+	room, ok := h.rooms[info.Room]
 	if !ok {
 		glog.Infoln("Room not found in request")
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
+		return nil
 	}
 	cameras := room.Cameras
 	if cameras == nil {
 		glog.Infoln("Cameras not found in room")
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
+		return nil
 	}
-	camera := c.Params.ByName("camera")
-	_, ok = cameras[camera]
+	_, ok = cameras[info.Camera]
 	if !ok {
 		glog.Infoln("Camera not found in room")
-		c.AbortWithStatus(http.StatusNotFound)
-		return
+		return nil
 	}
-	reciever = c.Params.ByName("reciever")
-	res, err = h.waitForProcess(reciever)
+	res, err := h.waitForProcess(info.Reciever)
 	if err != nil {
 		glog.Infoln("Wait for process:", err)
-		c.AbortWithStatus(http.StatusBadGateway)
-		return
+		return nil
 	}
 	cmd := fmt.Sprintf(`{
 		"name":"CreateSignalingConnection",
@@ -384,46 +401,37 @@ func preProccessSignaling(h *Hub, c *gin.Context) (res chan *websocket.Conn, rec
 		"content":{
 			"camera":"%s", "reciever":"%s"
 		}
-	}`, room.ID, camera, reciever)
+	}`, info.Room, info.Camera, info.Reciever)
 	room.Send <- []byte(cmd)
-	return res, reciever
-}
-
-func HandleManyCheckLogin(conf *goauth.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if ok, _ := conf.CheckStatus(c, goauth.Permitted); ok {
-			c.JSON(http.StatusOK, "")
-		} else {
-			c.JSON(http.StatusUnauthorized, "")
-		}
-	}
+	return res
 }
 
 type regRoomData struct {
 	Name string `json:"name"`
 }
 
-func HandleManyRegRoom(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+func HandleManyRegRoom(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data regRoomData
 		if err := c.Bind(&data); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err, "content": data})
+			glog.Infoln(err)
+			c.JSON(http.StatusBadRequest, Err("User bind err"))
 			return
 		}
 
 		one := One{SecretAddress: NewUUID()}
 		one.Name = data.Name
-		if err := c.Keys[conf.UserGinKey].(*Oauth).Account.RegOne(&one); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err, "content": one})
+		if err := c.Keys[UserKey].(*Oauth).Account.RegOne(&one); err != nil {
+			c.JSON(http.StatusInternalServerError, Err("Reg err"))
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{"addr": one.SecretAddress})
+		c.JSON(http.StatusOK, OK(one.SecretAddress))
 	}
 }
 
-func HandleManyLogoff(h *Hub, conf *goauth.Config) gin.HandlerFunc {
+func HandleManyLogoff(h *Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		iuser, ok := c.Get(conf.UserGinKey)
+		iuser, ok := c.Get(UserKey)
 		if !ok {
 			c.JSON(http.StatusForbidden, `{"error":1,"content":"user not authed"}`)
 			return
@@ -432,27 +440,6 @@ func HandleManyLogoff(h *Hub, conf *goauth.Config) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, `{"error":1,"content":"cannot del user"}`)
 			return
 		}
-		c.Redirect(http.StatusSeeOther, conf.PathLogout)
-	}
-}
-
-func HandleManyToken(h *Hub, conf *goauth.Config) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		oa, err := json.Marshal(c.Keys[conf.UserGinKey].(*Oauth))
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err, "content": "Marshal user error"})
-			return
-		}
-		token := jwt.New(jwt.SigningMethodHS256)
-		// Set some claims
-		token.Claims["oauth"] = string(oa)
-		token.Claims["exp"] = time.Now().Add(time.Second * 50).Unix()
-		// Sign and get the complete encoded token as a string
-		tokenString, err := token.SignedString(h.tokenSecret)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error(), "content": "Cannot gen token"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"token": tokenString})
+		c.JSON(http.StatusOK, `{"error":0,"content":"log off ok"}`)
 	}
 }

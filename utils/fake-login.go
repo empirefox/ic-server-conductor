@@ -12,7 +12,7 @@ func newFakeAccount() Account {
 		Ones: []One{newFakeOne()},
 	}
 	a.ID = 20
-	a.Name = "管理员"
+	a.Name = "admin"
 	return a
 }
 
@@ -21,7 +21,7 @@ func newFakeOne() One {
 		Owner: newFakeAccount(),
 	}
 	one.ID = 100
-	one.Name = "监控室1"
+	one.Name = "room1"
 	return one
 }
 

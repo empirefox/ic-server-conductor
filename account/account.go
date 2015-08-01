@@ -1,9 +1,16 @@
 package account
 
 import (
+	"encoding/json"
+	"errors"
 	"time"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+)
+
+var (
+	ErrBadToken = errors.New("Token should inclued oauth")
 )
 
 type BaseModel struct {
@@ -36,6 +43,18 @@ func (o *Oauth) OnOid(provider, oid string) error { return aservice.OnOid(o, pro
 func (o *Oauth) Permitted(c *gin.Context) bool    { return aservice.Permitted(o, c) }
 func (o *Oauth) Valid() bool                      { return aservice.Valid(o) }
 func (o *Oauth) GetOnes() error                   { return o.Account.GetOnes() }
+
+func (o *Oauth) FromToken(token *jwt.Token) error {
+	oi, ok := token.Claims["oauth"]
+	if !ok {
+		return ErrBadToken
+	}
+	oa, ok := oi.(string)
+	if !ok {
+		return ErrBadToken
+	}
+	return json.Unmarshal([]byte(oa), o)
+}
 
 /////////////////////////////////////////
 //                Account

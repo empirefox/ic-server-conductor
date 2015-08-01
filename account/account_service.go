@@ -12,6 +12,7 @@ import (
 var (
 	aservice            = NewAccountService()
 	AccountNotAuthedErr = errors.New("Account is not authed")
+	ErrParamsRequired   = errors.New("Query param required")
 )
 
 func SetService(a AccountService) {
@@ -27,7 +28,7 @@ type AccountService interface {
 	CreateTables() error
 	DropTables() error
 
-	FindOauthProviders(ops *[]OauthProvider) error
+	FindOauthProviders(ops *OauthProviders) error
 	SaveOauthProvider(op *OauthProvider) error
 
 	OnOid(o *Oauth, provider, oid string) error
@@ -69,7 +70,7 @@ func (accountService) DropTables() error {
 		DropTableIfExists(&Account{}).DropTableIfExists(&OauthProvider{}).Error
 }
 
-func (accountService) FindOauthProviders(ops *[]OauthProvider) error {
+func (accountService) FindOauthProviders(ops *OauthProviders) error {
 	return DB.Where(OauthProvider{Enabled: true}).Find(ops).Error
 }
 
@@ -153,6 +154,9 @@ func (accountService) Viewers(o *One) error {
 }
 
 func (accountService) OnOid(o *Oauth, provider, oid string) error {
+	if provider == "" || oid == "" {
+		return ErrParamsRequired
+	}
 	err := DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
 		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
