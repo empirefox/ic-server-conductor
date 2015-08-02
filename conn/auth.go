@@ -1,26 +1,23 @@
-package connections
+package conn
 
 import (
 	"errors"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
+	"github.com/gorilla/websocket"
+)
+
+const (
+	UserKey = "user"
 )
 
 var (
 	ErrInvalidToken = errors.New("Token is not valid")
 )
 
-// Wrap websocket.Conn to interface
-// Useful for test
-type Connection interface {
-	ReadMessage() (messageType int, p []byte, err error)
-	WriteMessage(messageType int, data []byte) error
-	Close() error
-}
-
-func AuthWs(conn Connection, secret interface{}) (*jwt.Token, error) {
-	_, p, err := conn.ReadMessage()
+func AuthWs(ws *websocket.Conn, secret interface{}) (*jwt.Token, error) {
+	_, p, err := ws.ReadMessage()
 	if err != nil {
 		glog.Infoln("Read message err:", err)
 		return nil, err
@@ -37,5 +34,5 @@ func AuthWs(conn Connection, secret interface{}) (*jwt.Token, error) {
 		glog.Infoln("Token is not valid")
 		return nil, ErrInvalidToken
 	}
-	return token, error
+	return token, nil
 }

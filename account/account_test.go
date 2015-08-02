@@ -186,3 +186,34 @@ func TestOne_Find(t *testing.T) {
 		})
 	})
 }
+
+func TestOauth_CanView(t *testing.T) {
+	Convey("Oauth", t, func() {
+		recoveryAccount()
+		Convey("should view special room", func() {
+			// init oauth
+			oauth := &Oauth{}
+			err := oauth.OnOid("p", "id")
+			So(err, ShouldBeNil)
+
+			// reg one then find one will ok
+			one := &One{SecretAddress: "addr"}
+			err = oauth.Account.RegOne(one)
+			So(err, ShouldBeNil)
+			err = one.Find([]byte("addr"))
+			So(err, ShouldBeNil)
+			So(oauth.CanView(one), ShouldBeTrue)
+
+			// init another oauth, will fail
+			oauth = &Oauth{}
+			err = oauth.OnOid("p", "id2")
+			So(err, ShouldBeNil)
+			So(oauth.CanView(one), ShouldBeFalse)
+
+			// view the one, will ok
+			err = oauth.Account.ViewOne(one)
+			So(err, ShouldBeNil)
+			So(oauth.CanView(one), ShouldBeTrue)
+		})
+	})
+}

@@ -8,7 +8,6 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
 	. "github.com/empirefox/ic-server-ws-signal/account"
-	"github.com/empirefox/ic-server-ws-signal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 )
@@ -35,7 +34,7 @@ func (s *Server) SaveOauth(c *gin.Context) {
 		return
 	}
 
-	s.OauthConfig.Providers, s.OauthJson = NewGoauthConf()
+	s.OauthJson = PageOauthsBytes()
 	c.JSON(http.StatusOK, gin.H{"error": 0, "content": "No need restart now!"})
 }
 
@@ -61,20 +60,20 @@ func (s *Server) Auth(kid string) gin.HandlerFunc {
 }
 
 func (s *Server) CheckManyUser(c *gin.Context) {
-	userBs, ok := c.Keys[s.ClaimsKey][s.UserKey]
+	userBs, ok := c.Keys[s.ClaimsKey].(map[string]interface{})[s.UserKey]
 	if !ok {
-		c.AbortWithError(http.StatusUnauthorized, utils.Err("User not found"))
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 	user, ok := userBs.(string)
 	if !ok {
-		c.AbortWithError(http.StatusUnauthorized, utils.Err("User format err"))
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 	o := &Oauth{}
 	if err := json.Unmarshal([]byte(user), o); err != nil {
 		glog.Infoln("Unmarshal user err:", err)
-		c.AbortWithError(http.StatusUnauthorized, utils.Err("User unmarshal err"))
+		c.AbortWithError(http.StatusUnauthorized, err)
 		return
 	}
 	c.Set(s.UserKey, o)

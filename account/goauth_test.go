@@ -4,6 +4,7 @@
 package account
 
 import (
+	"encoding/json"
 	"strconv"
 	"testing"
 
@@ -34,18 +35,18 @@ func initProvider(i int) (*OauthProvider, error) {
 	return p, DB.Save(p).Error
 }
 
-func Test_findProviders(t *testing.T) {
+func Test_PageOauthsBytes(t *testing.T) {
 	Convey("findProviders", t, func() {
 		recoveryAccount()
-		Convey("should gen providers", func() {
+		Convey("should gen PageOauths bytes", func() {
 			_, err := initProvider(1)
 			So(err, ShouldBeNil)
 			_, err = initProvider(2)
 			So(err, ShouldBeNil)
 
-			ps, pos := findProviders()
-			So(len(ps), ShouldEqual, 2)
-			So(len(pos), ShouldEqual, 2)
+			var pos []PageOauth
+			err = json.Unmarshal(PageOauthsBytes(), &pos)
+			So(err, ShouldBeNil)
 
 			posResult := []PageOauth{
 				{Path: "path1", Text: "provider1", Css: "css1"},

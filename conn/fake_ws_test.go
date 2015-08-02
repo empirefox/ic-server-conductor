@@ -1,4 +1,4 @@
-package connections
+package conn
 
 import (
 	"io"

@@ -1,4 +1,4 @@
-package connections
+package hub
 
 import (
 	"encoding/json"
@@ -10,7 +10,8 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	. "github.com/empirefox/ic-server-ws-signal/utils"
+	. "github.com/empirefox/ic-server-ws-signal/conn"
+	"github.com/empirefox/ic-server-ws-signal/utils"
 )
 
 var (
@@ -18,21 +19,15 @@ var (
 	RecieverDuplicated = errors.New("Reciever duplicated")
 )
 
-type ResponseToMany struct {
-	Room    *ControlRoom
-	To      uint
-	Content []byte
-}
-
-type Hub struct {
-	rooms         map[uint]*ControlRoom
-	clients       map[uint]*ManyControlConn
+type hub struct {
+	rooms         map[uint]ControlRoom
+	clients       map[uint]ControlUser
 	msg           chan *Message
 	cmd           chan *Command
-	reg           chan *ControlRoom
-	unreg         chan *ControlRoom
-	join          chan *ManyControlConn
-	leave         chan *ManyControlConn
+	reg           chan ControlRoom
+	unreg         chan ControlRoom
+	join          chan ControlUser
+	leave         chan ControlUser
 	sigResWaitMap map[string]chan *websocket.Conn
 	sigResMutex   sync.Mutex
 	inviteCodes   map[uint]codes
@@ -40,16 +35,16 @@ type Hub struct {
 	tokenSecret   []byte
 }
 
-func NewHub() *Hub {
-	return &Hub{
-		rooms:         make(map[uint]*ControlRoom),
-		clients:       make(map[uint]*ManyControlConn),
+func NewHub() Hub {
+	return &hub{
+		rooms:         make(map[uint]ControlRoom),
+		clients:       make(map[uint]ControlUser),
 		msg:           make(chan *Message, 64),
 		cmd:           make(chan *Command, 64),
-		reg:           make(chan *ControlRoom, 64),
-		unreg:         make(chan *ControlRoom, 64),
-		join:          make(chan *ManyControlConn, 64),
-		leave:         make(chan *ManyControlConn, 64),
+		reg:           make(chan ControlRoom, 64),
+		unreg:         make(chan ControlRoom, 64),
+		join:          make(chan ControlUser, 64),
+		leave:         make(chan ControlUser, 64),
 		sigResWaitMap: make(map[string]chan *websocket.Conn),
 		sigResMutex:   sync.Mutex{},
 		inviteCodes:   make(map[uint]codes),
@@ -58,7 +53,7 @@ func NewHub() *Hub {
 	}
 }
 
-func (h *Hub) Run() {
+func (h *hub) Run() {
 	defer func() {
 		if err := recover(); err != nil {
 			glog.Errorln(err)
@@ -82,40 +77,43 @@ func (h *Hub) Run() {
 	}
 }
 
-func (h *Hub) onReg(room *ControlRoom) {
-	h.rooms[room.ID] = room
-	if err := room.Viewers(); err != nil {
-		glog.Infoln("Viewers err:", err)
+func (h *hub) OnReg(room ControlRoom) { h.reg <- room }
+func (h *hub) onReg(room ControlRoom) {
+	h.rooms[room.Id()] = room
+	friends, err := room.Friends()
+	if err != nil {
+		glog.Infoln(err)
 		return
 	}
-	for _, user := range room.Accounts {
-		if many, ok := h.clients[user.ID]; ok {
-			room.Participants[user.ID] = many
+	for _, friend := range friends {
+		if many, ok := h.clients[friend.ID]; ok {
+			room.AddOnline(friend.ID, many)
 		}
 	}
 }
 
-func (h *Hub) onUnreg(room *ControlRoom) {
-	if room.One == nil {
+func (h *hub) OnUnreg(room ControlRoom) { h.unreg <- room }
+func (h *hub) onUnreg(room ControlRoom) {
+	if room.GetOne() == nil {
 		return
 	}
-	if room, ok := h.rooms[room.ID]; ok {
-		delete(h.rooms, room.ID)
-	}
+	delete(h.rooms, room.Id())
 }
 
-func (h *Hub) onMsg(msg *Message) {
-	msgStr, err := GetTypedMsg("Chat", msg)
+func (h *hub) OnMsg(msg *Message) { h.msg <- msg }
+func (h *hub) onMsg(msg *Message) {
+	msgStr, err := utils.GetTypedMsg("Chat", msg)
 	if err != nil {
 		glog.Errorln(err)
 		return
 	}
 	if room, ok := h.rooms[msg.Room]; ok {
-		room.broadcast(msgStr)
+		room.Broadcast(msgStr)
 	}
 }
 
-func (h *Hub) onCmd(cmd *Command) {
+func (h *hub) OnCmd(cmd *Command) { h.cmd <- cmd }
+func (h *hub) onCmd(cmd *Command) {
 	room, ok := h.rooms[cmd.Room]
 	if !ok {
 		glog.Errorln("Room not found in command")
@@ -126,47 +124,46 @@ func (h *Hub) onCmd(cmd *Command) {
 		glog.Errorln(err)
 		return
 	}
-	room.Send <- cmdStr
+	room.Send(cmdStr)
 }
 
-func (h *Hub) onJoin(many *ManyControlConn) {
-	h.clients[many.Account.ID] = many
-	if err := many.GetOnes(); err != nil {
+func (h *hub) OnJoin(many ControlUser) { h.join <- many }
+func (h *hub) onJoin(many ControlUser) {
+	h.clients[many.Id()] = many
+	ones, err := many.RoomOnes()
+	if err != nil {
 		return
 	}
-	for _, one := range many.Account.Ones {
-		room, ok := h.rooms[one.ID]
-		if !ok {
-			glog.Errorln("Room not found in command")
-			continue
-		}
-		room.Participants[many.Account.ID] = many
-	}
-}
-
-func (h *Hub) onLeave(many *ManyControlConn) {
-	if many.Oauth == nil {
-		return
-	}
-	if _, ok := h.clients[many.Account.ID]; ok {
-		delete(h.clients, many.Account.ID)
-	}
-	if err := many.GetOnes(); err != nil {
-		return
-	}
-	for _, one := range many.Account.Ones {
-		room, ok := h.rooms[one.ID]
-		if !ok {
-			glog.Errorln("Room not found in command")
-			return
-		}
-		if _, ok := room.Participants[many.Account.ID]; ok {
-			delete(room.Participants, many.Account.ID)
+	for _, one := range ones {
+		if room, ok := h.rooms[one.ID]; ok {
+			room.AddOnline(many.Id(), many)
 		}
 	}
 }
 
-func (h *Hub) waitForProcess(reciever string) (chan *websocket.Conn, error) {
+func (h *hub) OnLeave(many ControlUser) { h.leave <- many }
+func (h *hub) onLeave(many ControlUser) {
+	if many.GetOauth() == nil {
+		return
+	}
+	delete(h.clients, many.Id())
+	ones, err := many.RoomOnes()
+	if err != nil {
+		return
+	}
+	for _, one := range ones {
+		if room, ok := h.rooms[one.ID]; ok {
+			room.RemoveOnline(many.Id())
+		}
+	}
+}
+
+func (h *hub) GetRoom(id uint) (room ControlRoom, ok bool) {
+	room, ok = h.rooms[id]
+	return
+}
+
+func (h *hub) WaitForProcess(reciever string) (chan *websocket.Conn, error) {
 	h.sigResMutex.Lock()
 	defer h.sigResMutex.Unlock()
 	if _, ok := h.sigResWaitMap[reciever]; ok {
@@ -177,7 +174,7 @@ func (h *Hub) waitForProcess(reciever string) (chan *websocket.Conn, error) {
 	return resWait, nil
 }
 
-func (h *Hub) processFromWait(reciever string) (chan *websocket.Conn, error) {
+func (h *hub) ProcessFromWait(reciever string) (chan *websocket.Conn, error) {
 	h.sigResMutex.Lock()
 	defer h.sigResMutex.Unlock()
 	if resWait, ok := h.sigResWaitMap[reciever]; ok {
@@ -199,7 +196,7 @@ func (cs codes) genCode() (string, chan bool) {
 	return code, stop
 }
 
-func (h *Hub) waitForStop(cs codes, code string, stop chan bool) {
+func (h *hub) waitForStop(cs codes, code string, stop chan bool) {
 	if err := recover(); err != nil {
 		glog.Errorln(err)
 	}
@@ -209,12 +206,10 @@ func (h *Hub) waitForStop(cs codes, code string, stop chan bool) {
 	}
 	h.inviteMutex.Lock()
 	defer h.inviteMutex.Unlock()
-	if _, ok := cs[code]; ok {
-		delete(cs, code)
-	}
+	delete(cs, code)
 }
 
-func (h *Hub) ValidateInviteCode(room uint, code string) bool {
+func (h *hub) ValidateInviteCode(room uint, code string) bool {
 	h.inviteMutex.Lock()
 	defer h.inviteMutex.Unlock()
 	if cs, ok := h.inviteCodes[room]; ok {
@@ -226,7 +221,7 @@ func (h *Hub) ValidateInviteCode(room uint, code string) bool {
 	return false
 }
 
-func (h *Hub) NewInviteCode(room uint) string {
+func (h *hub) NewInviteCode(room uint) string {
 	h.inviteMutex.Lock()
 	defer h.inviteMutex.Unlock()
 	cs, ok := h.inviteCodes[room]

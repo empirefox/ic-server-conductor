@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jinzhu/gorm"
 
 	. "github.com/empirefox/ic-server-ws-signal/gorm"
 )
@@ -23,6 +22,14 @@ func SetService(a AccountService) {
 	}
 }
 
+func ClearTables() error {
+	err := aservice.DropTables()
+	if err != nil {
+		return err
+	}
+	return aservice.CreateTables()
+}
+
 // Used by application
 type AccountService interface {
 	CreateTables() error
@@ -34,6 +41,7 @@ type AccountService interface {
 	OnOid(o *Oauth, provider, oid string) error
 	Permitted(o *Oauth, c *gin.Context) bool
 	Valid(o *Oauth) bool
+	CanView(o *Oauth, one *One) bool
 
 	GetOnes(a *Account) error
 	RegOne(a *Account, o *One) error
@@ -127,15 +135,7 @@ func (accountService) RemoveOne(a *Account, one *One) error {
 func (accountService) FindOne(o *One, addr []byte) error {
 	var w One
 	w.SecretAddress = string(addr)
-	err := DB.Where(w).Preload("Owner").First(o).Error
-	if err != nil {
-		return err
-	}
-	err = DB.Model(o).Related(&o.Accounts, "Accounts").Error
-	if err == gorm.RecordNotFound {
-		return nil
-	}
-	return err
+	return DB.Where(w).Preload("Owner").First(o).Error
 }
 
 func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {
@@ -157,12 +157,21 @@ func (accountService) OnOid(o *Oauth, provider, oid string) error {
 	if provider == "" || oid == "" {
 		return ErrParamsRequired
 	}
-	err := DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
+	return DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
 		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
-	return err
 }
 
 func (accountService) Permitted(o *Oauth, c *gin.Context) bool { return o.Validated }
 
 func (accountService) Valid(o *Oauth) bool { return o.Enabled && o.Account.Enabled }
+
+func (accountService) CanView(o *Oauth, one *One) bool {
+	r := AccountOne{
+		AccountId: o.AccountId,
+		OneId:     one.ID,
+	}
+	var count uint
+	DB.Model(r).Where(r).Count(&count)
+	return count == 1
+}

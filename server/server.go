@@ -13,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 
-	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
 	"github.com/empirefox/ic-server-ws-signal/account"
@@ -29,14 +28,12 @@ const (
 )
 
 type Server struct {
-	ClaimsKey    string
-	UserKey      string
-	Keys         map[string][]byte
-	Hub          *Hub
-	OauthConfig  *goauth.Config
-	OauthJson    []byte
-	IsDevMode    bool
-	ValidateGets map[string]string
+	ClaimsKey string
+	UserKey   string
+	Keys      map[string][]byte
+	Hub       Hub
+	OauthJson []byte
+	IsDevMode bool
 }
 
 func (s *Server) SecureWs(c *gin.Context) {
@@ -48,7 +45,7 @@ func (s *Server) SecureWs(c *gin.Context) {
 }
 
 func (s *Server) GetApiProviders(c *gin.Context) {
-	var ops OauthProviders
+	var ops account.OauthProviders
 	if err := ops.All(); err != nil {
 		glog.Errorln(err)
 		c.AbortWithStatus(http.StatusNotImplemented)
@@ -88,16 +85,16 @@ func (s *Server) newManyToken(c *gin.Context, ouser interface{}) {
 	tokenString, err := token.SignedString(s.Keys[SK_MANY])
 	if err != nil {
 		c.AbortWithStatus(http.StatusInternalServerError)
-		return err
+		return
 	}
 
 	c.JSON(http.StatusOK, utils.OK(tokenString))
 }
 
 func (s *Server) GetLogin(c *gin.Context) {
-	claims := c.Keys[s.ClaimsKey]
+	claims := c.Keys[s.ClaimsKey].(map[string]interface{})
 	ouser := &account.Oauth{}
-	if err := ouser.OnOid(claims["provider"], claims["oid"]); err != nil {
+	if err := ouser.OnOid(claims["provider"].(string), claims["oid"].(string)); err != nil {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
@@ -106,7 +103,7 @@ func (s *Server) GetLogin(c *gin.Context) {
 
 func (s *Server) GetCheckToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		claims := c.Keys[s.ClaimsKey]
+		claims := c.Keys[s.ClaimsKey].(map[string]interface{})
 		exp := claims["exp"].(int64)
 		update := time.Now().Add(time.Minute * 30).Unix()
 		if exp > update {
@@ -115,6 +112,14 @@ func (s *Server) GetCheckToken() gin.HandlerFunc {
 		}
 		s.newManyToken(c, claims[s.UserKey])
 	}
+}
+
+func (s *Server) PutClearTables(c *gin.Context) {
+	if err := account.ClearTables(); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, "")
 }
 
 func (s *Server) Run() error {
@@ -141,7 +146,8 @@ func (s *Server) Run() error {
 	router.GET("/auth/oauths", func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
-	sys.POST("/oauth", SaveOauth)
+	sys.PUT("/clear-tables", s.PutClearTables)
+	sys.POST("/oauth", s.SaveOauth)
 
 	call := router.Group("/call", s.Auth(SK_CALL))
 	call.GET("/login", s.GetLogin)
@@ -155,8 +161,8 @@ func (s *Server) Run() error {
 	// websocket
 	// peer from MANY client
 	manyws := router.Group("/mws")
-	manyws.GET("/ctrl", HandleManyCtrl(s.Hub))
-	manyws.GET("/signaling", HandleManySignaling(s.Hub))
+	manyws.GET("/ctrl", HandleManyCtrl(s.Hub, s.Keys[SK_MANY]))
+	manyws.GET("/signaling", HandleManySignaling(s.Hub, s.Keys[SK_MANY]))
 
 	// rest
 	many := router.Group("/many", s.Auth(SK_MANY), s.CheckManyUser)

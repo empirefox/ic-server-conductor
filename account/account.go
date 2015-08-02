@@ -43,6 +43,7 @@ func (o *Oauth) OnOid(provider, oid string) error { return aservice.OnOid(o, pro
 func (o *Oauth) Permitted(c *gin.Context) bool    { return aservice.Permitted(o, c) }
 func (o *Oauth) Valid() bool                      { return aservice.Valid(o) }
 func (o *Oauth) GetOnes() error                   { return o.Account.GetOnes() }
+func (o *Oauth) CanView(one *One) bool            { return aservice.CanView(o, one) }
 
 func (o *Oauth) FromToken(token *jwt.Token) error {
 	oi, ok := token.Claims["oauth"]
@@ -63,7 +64,7 @@ func (o *Oauth) FromToken(token *jwt.Token) error {
 type Account struct {
 	BaseModel
 	Oauths  []Oauth `json:",omitempty"`
-	Ones    []One   `json:",omitempty" gorm:"many2many:account_ones;"`
+	Ones    []One   `json:"-"          gorm:"many2many:account_ones;"`
 	Enabled bool    `json:",omitempty" sql:"default:true"`
 }
 
@@ -71,6 +72,7 @@ func (a *Account) GetOnes() error { return aservice.GetOnes(a) }
 
 // one must be non-exist record
 // a   must be from Oauth.OnOid
+// will not save id to o instance
 func (a *Account) RegOne(o *One) error { return aservice.RegOne(a, o) }
 
 // one must be exist record
@@ -94,7 +96,7 @@ type One struct {
 	Enabled       bool      `json:",omitempty"                    sql:"default:true"`
 	Owner         Account   `json:",omitempty"`
 	OwnerId       uint      `json:",omitempty"`
-	Accounts      []Account `json:",omitempty"                    gorm:"many2many:account_ones;"`
+	Accounts      []Account `json:"-"                             gorm:"many2many:account_ones;"`
 }
 
 func (o *One) Find(addr []byte) error             { return aservice.FindOne(o, addr) }
