@@ -20,6 +20,12 @@ func newFakeDbOne(id uint) *account.One {
 	return one
 }
 
+func newFakeIdRoom(id uint) *fakeRoom {
+	room := &fakeRoom{}
+	room.id = id
+	return room
+}
+
 type fakeRoom struct {
 	fakeConn
 	dataBroadcasted []byte

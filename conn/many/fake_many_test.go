@@ -5,9 +5,16 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func newFakeDbOauth() *account.Oauth {
+func newFakeDbOauth(id uint) *account.Oauth {
 	o := &account.Oauth{}
+	o.Account.ID = id
 	return o
+}
+
+func newFakeIdMany(id uint) *fakeMany {
+	many := &fakeMany{}
+	many.Oauth = newFakeDbOauth(id)
+	return many
 }
 
 type fakeMany struct {
@@ -19,17 +26,17 @@ type fakeMany struct {
 	closeCalledTimes int
 }
 
-func (c *fakeConn) Send(msg []byte) { c.dataSent = msg }
-func (c *fakeConn) Close() error    { c.closeCalledTimes++; return nil }
+func (c *fakeMany) Send(msg []byte) { c.dataSent = msg }
+func (c *fakeMany) Close() error    { c.closeCalledTimes++; return nil }
 
-func (c *fakeConn) ReadMessage() (messageType int, p []byte, err error) {
+func (c *fakeMany) ReadMessage() (messageType int, p []byte, err error) {
 	if c.messageType == 0 {
 		c.messageType = websocket.TextMessage
 	}
 	return c.messageType, c.dataForRead, nil
 }
 
-func (c *fakeConn) WriteMessage(messageType int, data []byte) error {
+func (c *fakeMany) WriteMessage(messageType int, data []byte) error {
 	c.dataWrote = data
 	return nil
 }

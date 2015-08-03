@@ -15,7 +15,7 @@ type fakeHub struct {
 }
 
 func (h *fakeHub) Run() {}
-func (h *fakeHub) GetRoom(id uint) (ControlRoom, bool) {
+func (h *fakeHub) GetRoom(id uint) (room ControlRoom, ok bool) {
 	room, ok = h.rooms[id]
 	return
 }

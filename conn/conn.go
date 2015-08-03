@@ -6,12 +6,16 @@ import (
 )
 
 // Wrap websocket.Conn and common fn
-type Connection interface {
-	Id() uint
-	Send(msg []byte)
+type Ws interface {
 	ReadMessage() (messageType int, p []byte, err error)
 	WriteMessage(messageType int, data []byte) error
 	Close() error
+}
+
+type Connection interface {
+	Ws
+	Id() uint
+	Send(msg []byte)
 }
 
 type ControlUser interface {

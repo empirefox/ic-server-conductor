@@ -5,7 +5,6 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/golang/glog"
-	"github.com/gorilla/websocket"
 )
 
 const (
@@ -16,7 +15,7 @@ var (
 	ErrInvalidToken = errors.New("Token is not valid")
 )
 
-func AuthWs(ws *websocket.Conn, secret interface{}) (*jwt.Token, error) {
+func AuthWs(ws Ws, secret interface{}) (*jwt.Token, error) {
 	_, p, err := ws.ReadMessage()
 	if err != nil {
 		glog.Infoln("Read message err:", err)

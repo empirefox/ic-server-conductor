@@ -178,7 +178,7 @@ func (many *controlUser) onReadNotAuthed(typ, content []byte) {
 	glog.Errorln("Unknow unauthed:", string(typ), string(content))
 }
 
-func AuthMws(ws *websocket.Conn, secret interface{}) (*Oauth, error) {
+func AuthMws(ws conn.Ws, secret interface{}) (*Oauth, error) {
 	token, err := conn.AuthWs(ws, secret)
 	if err != nil {
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth token failed"}`))

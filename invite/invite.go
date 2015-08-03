@@ -8,10 +8,10 @@ import (
 	"github.com/golang/glog"
 
 	. "github.com/empirefox/ic-server-ws-signal/account"
-	. "github.com/empirefox/ic-server-ws-signal/connections"
+	. "github.com/empirefox/ic-server-ws-signal/conn"
 )
 
-func HandleManyGetInviteCode(h *Hub) gin.HandlerFunc {
+func HandleManyGetInviteCode(h Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 		if err != nil {
@@ -31,7 +31,7 @@ func HandleManyGetInviteCode(h *Hub) gin.HandlerFunc {
 	}
 }
 
-func onManyInvite(h *Hub, c *gin.Context) (ok bool) {
+func onManyInvite(h Hub, c *gin.Context) (ok bool) {
 	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
 	if err != nil {
 		glog.Infoln("No room set in context:", err)
@@ -59,7 +59,7 @@ func onManyInvite(h *Hub, c *gin.Context) (ok bool) {
 	return true
 }
 
-func HandleManyOnInvite(h *Hub) gin.HandlerFunc {
+func HandleManyOnInvite(h Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if onManyInvite(h, c) {
 			c.JSON(http.StatusOK, "")

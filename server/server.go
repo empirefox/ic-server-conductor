@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,7 +18,9 @@ import (
 	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
 	"github.com/empirefox/ic-server-ws-signal/account"
-	. "github.com/empirefox/ic-server-ws-signal/connections"
+	"github.com/empirefox/ic-server-ws-signal/conn"
+	"github.com/empirefox/ic-server-ws-signal/conn/many"
+	"github.com/empirefox/ic-server-ws-signal/conn/one"
 	"github.com/empirefox/ic-server-ws-signal/invite"
 	"github.com/empirefox/ic-server-ws-signal/utils"
 )
@@ -28,12 +32,13 @@ const (
 )
 
 type Server struct {
-	ClaimsKey string
-	UserKey   string
-	Keys      map[string][]byte
-	Hub       Hub
-	OauthJson []byte
-	IsDevMode bool
+	ClaimsKey       string
+	UserKey         string
+	Keys            map[string][]byte
+	Hub             conn.Hub
+	OauthJson       []byte
+	IsDevMode       bool
+	OnEngineCreated func(*gin.Engine)
 }
 
 func (s *Server) SecureWs(c *gin.Context) {
@@ -115,6 +120,11 @@ func (s *Server) GetCheckToken() gin.HandlerFunc {
 }
 
 func (s *Server) PutClearTables(c *gin.Context) {
+	allow, _ := strconv.ParseBool(os.Getenv("ALLOW_CLEAR_TABLES"))
+	if !allow {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
 	if err := account.ClearTables(); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
@@ -125,6 +135,9 @@ func (s *Server) PutClearTables(c *gin.Context) {
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	router := gin.Default()
+	if s.OnEngineCreated != nil {
+		s.OnEngineCreated(router)
+	}
 
 	router.Use(secure.Secure(secure.Options{
 		SSLRedirect: true,
@@ -154,23 +167,23 @@ func (s *Server) Run() error {
 	call.GET("/providers", s.GetApiProviders)
 
 	// peer from ONE client
-	one := router.Group("/one")
-	one.GET("/ctrl", HandleOneCtrl(s.Hub))
-	one.GET("/signaling/:reciever", HandleOneSignaling(s.Hub))
+	ro := router.Group("/one")
+	ro.GET("/ctrl", one.HandleOneCtrl(s.Hub))
+	ro.GET("/signaling/:reciever", one.HandleOneSignaling(s.Hub))
 
 	// websocket
 	// peer from MANY client
 	manyws := router.Group("/mws")
-	manyws.GET("/ctrl", HandleManyCtrl(s.Hub, s.Keys[SK_MANY]))
-	manyws.GET("/signaling", HandleManySignaling(s.Hub, s.Keys[SK_MANY]))
+	manyws.GET("/ctrl", many.HandleManyCtrl(s.Hub, s.Keys[SK_MANY]))
+	manyws.GET("/signaling", many.HandleManySignaling(s.Hub, s.Keys[SK_MANY]))
 
 	// rest
-	many := router.Group("/many", s.Auth(SK_MANY), s.CheckManyUser)
-	many.GET("/logoff", HandleManyLogoff(s.Hub))
-	many.POST("/reg-room", HandleManyRegRoom(s.Hub))
-	many.GET("/invite-code/:room", invite.HandleManyGetInviteCode(s.Hub))
-	many.GET("/invite/:room/:code", invite.HandleManyOnInvite(s.Hub))
-	many.POST("/refresh-token", func(c *gin.Context) { c.JSON(http.StatusOK, "") })
+	rm := router.Group("/many", s.Auth(SK_MANY), s.CheckManyUser)
+	rm.GET("/logoff", many.HandleManyLogoff(s.Hub))
+	rm.POST("/reg-room", many.HandleManyRegRoom(s.Hub))
+	rm.GET("/invite-code/:room", invite.HandleManyGetInviteCode(s.Hub))
+	rm.GET("/invite/:room/:code", invite.HandleManyOnInvite(s.Hub))
+	rm.POST("/refresh-token", func(c *gin.Context) { c.JSON(http.StatusOK, "") })
 
 	return router.Run(paas.GetBindAddr())
 }
