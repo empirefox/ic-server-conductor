@@ -9,7 +9,7 @@ import (
 	_ "github.com/lib/pq"
 	. "github.com/smartystreets/goconvey/convey"
 
-	. "github.com/empirefox/ic-server-ws-signal/gorm"
+	. "github.com/empirefox/ic-server-conductor/gorm"
 )
 
 func init() {

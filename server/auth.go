@@ -7,7 +7,7 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
-	. "github.com/empirefox/ic-server-ws-signal/account"
+	. "github.com/empirefox/ic-server-conductor/account"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 )

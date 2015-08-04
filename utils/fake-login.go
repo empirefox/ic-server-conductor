@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 
-	. "github.com/empirefox/ic-server-ws-signal/account"
+	. "github.com/empirefox/ic-server-conductor/account"
 )
 
 func newFakeAccount() Account {

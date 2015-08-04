@@ -11,18 +11,17 @@ import (
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/contrib/secure"
-	"github.com/gin-gonic/contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
+	"github.com/itsjamie/gin-cors"
 
 	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
-	"github.com/empirefox/ic-server-ws-signal/account"
-	"github.com/empirefox/ic-server-ws-signal/conn"
-	"github.com/empirefox/ic-server-ws-signal/conn/many"
-	"github.com/empirefox/ic-server-ws-signal/conn/one"
-	"github.com/empirefox/ic-server-ws-signal/invite"
-	"github.com/empirefox/ic-server-ws-signal/utils"
+	"github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/ic-server-conductor/conn"
+	"github.com/empirefox/ic-server-conductor/conn/many"
+	"github.com/empirefox/ic-server-conductor/conn/one"
+	"github.com/empirefox/ic-server-conductor/invite"
 )
 
 const (
@@ -93,7 +92,7 @@ func (s *Server) newManyToken(c *gin.Context, ouser interface{}) {
 		return
 	}
 
-	c.JSON(http.StatusOK, utils.OK(tokenString))
+	c.String(http.StatusOK, tokenString)
 }
 
 func (s *Server) GetLogin(c *gin.Context) {
@@ -119,7 +118,7 @@ func (s *Server) GetCheckToken() gin.HandlerFunc {
 	}
 }
 
-func (s *Server) PutClearTables(c *gin.Context) {
+func (s *Server) PostClearTables(c *gin.Context) {
 	allow, _ := strconv.ParseBool(os.Getenv("ALLOW_CLEAR_TABLES"))
 	if !allow {
 		c.AbortWithStatus(http.StatusForbidden)
@@ -134,6 +133,16 @@ func (s *Server) PutClearTables(c *gin.Context) {
 
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
+	corsMiddleWare := cors.Middleware(cors.Config{
+		Origins:         "*",
+		Methods:         "GET, PUT, POST, DELETE",
+		RequestHeaders:  "Origin, Authorization, Content-Type",
+		ExposedHeaders:  "",
+		MaxAge:          48 * time.Hour,
+		Credentials:     false,
+		ValidateHeaders: false,
+	})
+
 	router := gin.Default()
 	if s.OnEngineCreated != nil {
 		s.OnEngineCreated(router)
@@ -150,16 +159,12 @@ func (s *Server) Run() error {
 
 	router.Use(s.SecureWs)
 
-	router.Use(static.Serve("/", static.LocalFile("public", true)))
 	// peer from MANY client
 	router.GET("/sys-data.js", s.GetSystemData)
-
-	// login page will be find in static serve
-	// logout will proccess some logic
-	router.GET("/auth/oauths", func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
+	router.GET("auth/oauths", corsMiddleWare, func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
-	sys.PUT("/clear-tables", s.PutClearTables)
+	sys.POST("/clear-tables", s.PostClearTables)
 	sys.POST("/oauth", s.SaveOauth)
 
 	call := router.Group("/call", s.Auth(SK_CALL))
@@ -178,8 +183,9 @@ func (s *Server) Run() error {
 	manyws.GET("/signaling", many.HandleManySignaling(s.Hub, s.Keys[SK_MANY]))
 
 	// rest
-	rm := router.Group("/many", s.Auth(SK_MANY), s.CheckManyUser)
-	rm.GET("/logoff", many.HandleManyLogoff(s.Hub))
+	rm := router.Group("/many", corsMiddleWare, s.Auth(SK_MANY), s.CheckManyUser)
+
+	rm.DELETE("/logoff", many.HandleManyLogoff(s.Hub))
 	rm.POST("/reg-room", many.HandleManyRegRoom(s.Hub))
 	rm.GET("/invite-code/:room", invite.HandleManyGetInviteCode(s.Hub))
 	rm.GET("/invite/:room/:code", invite.HandleManyOnInvite(s.Hub))

@@ -2,8 +2,8 @@
 package many
 
 import (
-	"github.com/empirefox/ic-server-ws-signal/account"
-	. "github.com/empirefox/ic-server-ws-signal/conn"
+	"github.com/empirefox/ic-server-conductor/account"
+	. "github.com/empirefox/ic-server-conductor/conn"
 )
 
 func newFakeFriend(id uint) account.Account {

@@ -1,7 +1,7 @@
 package many
 
 import (
-	"github.com/empirefox/ic-server-ws-signal/account"
+	"github.com/empirefox/ic-server-conductor/account"
 	"github.com/gorilla/websocket"
 )
 

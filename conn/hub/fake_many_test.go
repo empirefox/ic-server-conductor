@@ -1,6 +1,6 @@
 package hub
 
-import "github.com/empirefox/ic-server-ws-signal/account"
+import "github.com/empirefox/ic-server-conductor/account"
 
 func newFakeDbOauth() *account.Oauth {
 	o := &account.Oauth{}

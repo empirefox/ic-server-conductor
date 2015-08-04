@@ -3,8 +3,8 @@ package many
 import (
 	"encoding/json"
 
-	. "github.com/empirefox/ic-server-ws-signal/conn"
-	"github.com/empirefox/ic-server-ws-signal/utils"
+	. "github.com/empirefox/ic-server-conductor/conn"
+	"github.com/empirefox/ic-server-conductor/utils"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 )

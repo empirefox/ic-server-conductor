@@ -7,8 +7,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 
-	. "github.com/empirefox/ic-server-ws-signal/account"
-	. "github.com/empirefox/ic-server-ws-signal/conn"
+	. "github.com/empirefox/ic-server-conductor/account"
+	. "github.com/empirefox/ic-server-conductor/conn"
 )
 
 func HandleManyGetInviteCode(h Hub) gin.HandlerFunc {

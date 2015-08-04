@@ -3,8 +3,8 @@ package hub
 import (
 	"testing"
 
-	"github.com/empirefox/ic-server-ws-signal/account"
-	. "github.com/empirefox/ic-server-ws-signal/conn"
+	"github.com/empirefox/ic-server-conductor/account"
+	. "github.com/empirefox/ic-server-conductor/conn"
 	. "github.com/smartystreets/goconvey/convey"
 )
 

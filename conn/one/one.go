@@ -11,9 +11,9 @@ import (
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	. "github.com/empirefox/ic-server-ws-signal/account"
-	"github.com/empirefox/ic-server-ws-signal/conn"
-	. "github.com/empirefox/ic-server-ws-signal/utils"
+	. "github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/ic-server-conductor/conn"
+	. "github.com/empirefox/ic-server-conductor/utils"
 )
 
 const (

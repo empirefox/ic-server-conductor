@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	. "github.com/empirefox/ic-server-ws-signal/gorm"
+	. "github.com/empirefox/ic-server-conductor/gorm"
 )
 
 var (
