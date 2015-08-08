@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
@@ -22,20 +23,12 @@ func CheckIsSystemMode(c *gin.Context) {
 	c.Abort()
 }
 
-func (s *Server) SaveOauth(c *gin.Context) {
-	var op OauthProvider
-	if err := c.Bind(&op); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": 1, "content": err})
+func (s *Server) SecureWs(c *gin.Context) {
+	if strings.EqualFold(c.Request.URL.Scheme, "ws") {
+		glog.Infoln("insecure:", *c.Request.URL)
+		c.Abort()
 		return
 	}
-
-	if err := op.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": 1, "content": "Cannot save"})
-		return
-	}
-
-	s.OauthJson = PageOauthsBytes()
-	c.JSON(http.StatusOK, gin.H{"error": 0, "content": "No need restart now!"})
 }
 
 func (s *Server) Auth(kid string) gin.HandlerFunc {

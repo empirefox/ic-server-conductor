@@ -1,16 +1,9 @@
 package account
 
 import (
-	"encoding/json"
-	"errors"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	ErrBadToken = errors.New("Token should inclued oauth")
 )
 
 type BaseModel struct {
@@ -39,23 +32,12 @@ type Oauth struct {
 // Find Oauth, preload Account and Account.Ones
 // Create when not found
 // Account will be created when a user do first login
-func (o *Oauth) OnOid(provider, oid string) error { return aservice.OnOid(o, provider, oid) }
-func (o *Oauth) Permitted(c *gin.Context) bool    { return aservice.Permitted(o, c) }
-func (o *Oauth) Valid() bool                      { return aservice.Valid(o) }
-func (o *Oauth) GetOnes() error                   { return o.Account.GetOnes() }
-func (o *Oauth) CanView(one *One) bool            { return aservice.CanView(o, one) }
-
-func (o *Oauth) FromToken(token *jwt.Token) error {
-	oi, ok := token.Claims["oauth"]
-	if !ok {
-		return ErrBadToken
-	}
-	oa, ok := oi.(string)
-	if !ok {
-		return ErrBadToken
-	}
-	return json.Unmarshal([]byte(oa), o)
-}
+func (o *Oauth) OnOid(provider, oid string) error     { return aservice.OnOid(o, provider, oid) }
+func (o *Oauth) FindOauth(provider, oid string) error { return aservice.FindOauth(o, provider, oid) }
+func (o *Oauth) Permitted(c *gin.Context) bool        { return aservice.Permitted(o, c) }
+func (o *Oauth) Valid() bool                          { return aservice.Valid(o) }
+func (o *Oauth) GetOnes() error                       { return o.Account.GetOnes() }
+func (o *Oauth) CanView(one *One) bool                { return aservice.CanView(o, one) }
 
 /////////////////////////////////////////
 //                Account
@@ -103,6 +85,7 @@ func (o *One) Find(addr []byte) error             { return aservice.FindOne(o, a
 func (o *One) FindIfOwner(id, ownerId uint) error { return aservice.FindOneIfOwner(o, id, ownerId) }
 func (o *One) Save() error                        { return aservice.Save(o) }
 func (o *One) Viewers() error                     { return aservice.Viewers(o) }
+func (o *One) Delete() error                      { return aservice.Delete(o) }
 
 /////////////////////////////////////////
 //              AccountOne

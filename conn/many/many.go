@@ -5,14 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
-	gws "github.com/empirefox/gotool/ws"
 	. "github.com/empirefox/ic-server-conductor/account"
 	"github.com/empirefox/ic-server-conductor/conn"
 	. "github.com/empirefox/ic-server-conductor/utils"
@@ -185,7 +183,7 @@ func AuthMws(ws conn.Ws, secret interface{}) (*Oauth, error) {
 		return nil, err
 	}
 	o := &Oauth{}
-	if err = o.FromToken(token); err != nil {
+	if err = conn.GetTokenOauth(token, o); err != nil {
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth failed"}`))
 		return nil, err
 	}
@@ -203,6 +201,7 @@ func HandleManyCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
 		defer ws.Close()
 		o, err := AuthMws(ws, secret)
 		if err != nil {
+			glog.Infoln("Auth failed:", err)
 			return
 		}
 		many := newControlUser(h, ws)
@@ -245,16 +244,31 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 	case "ManageSetRoomName":
 		// Content: new_name
 		// Proccess in server
-		one.Name = string(cmd.Content)
+		one.Name = string(cmd.Value())
 		if err := one.Save(); err != nil {
 			glog.Errorln(err)
 			many.Send(GetTypedInfo("SetRoomName Error"))
 			return
 		}
 		msg := []byte(fmt.Sprintf(`{
-			"type":"ManageSetRoomName",
-			"content":{"name":"%s"}
-		}`, one.Name))
+			"type":"Response","to":"ManageSetRoomName",
+			"content":{"id":%d,"name":"%s"}
+		}`, one.ID, one.Name))
+		many.Send(msg)
+	case "ManageDelRoom":
+		if err := one.Delete(); err != nil {
+			glog.Errorln(err)
+			many.Send(GetTypedInfo("DelRoom Error"))
+			return
+		}
+		room, ok := many.hub.GetRoom(cmd.Room)
+		if ok {
+			room.Close()
+		}
+		msg := []byte(fmt.Sprintf(`{
+			"type":"Response","to":"ManageDelRoom",
+			"content":%d
+		}`, one.ID))
 		many.Send(msg)
 	case "ManageGetIpcam", "ManageSetIpcam", "ManageDelIpcam", "ManageReconnectIpcam":
 		// Content(string): ipcam_id/ipcam/ipcam_id
@@ -280,129 +294,5 @@ func (many *controlUser) onManyGetData(name []byte) {
 	default:
 		glog.Errorln("Unknow GetManyData name:", string(name))
 		many.Send(GetTypedInfo("Unknow GetManyData name:" + string(name)))
-	}
-}
-
-type StartSignalingInfo struct {
-	Room     uint   `json:"room"`
-	Camera   string `json:"camera"`
-	Reciever string `json:"reciever"`
-}
-
-// many signaling
-func HandleManySignaling(h conn.Hub, secret interface{}) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			glog.Infoln("Upgrade failed:", err)
-			c.AbortWithStatus(http.StatusBadGateway)
-			return
-		}
-		defer ws.Close()
-		o, err := AuthMws(ws, secret)
-		if err != nil {
-			return
-		}
-
-		_, startInfo, err := ws.ReadMessage()
-		if err != nil {
-			glog.Infoln("Read start info err:", err)
-			return
-		}
-
-		var info StartSignalingInfo
-		if err := json.Unmarshal(startInfo, &info); err != nil {
-			glog.Infoln("Unmarshal info err:", err)
-			return
-		}
-
-		res := preProccessSignaling(h, &info, o)
-		if res == nil {
-			return
-		}
-		var resWs *websocket.Conn
-		select {
-		case resWs = <-res:
-		case <-time.After(time.Second * 15):
-			h.ProcessFromWait(info.Reciever)
-			glog.Infoln("Wait for one signaling timeout")
-			return
-		}
-		gws.Pipe(ws, resWs)
-		res <- nil
-	}
-}
-
-func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *Oauth) chan *websocket.Conn {
-	room, ok := h.GetRoom(info.Room)
-	if !ok {
-		glog.Infoln("Room not found in request")
-		return nil
-	}
-	if !o.CanView(room.GetOne()) {
-		glog.Infoln("Not permited to view this room")
-		return nil
-	}
-	cameras := room.Ipcams()
-	if cameras == nil {
-		glog.Infoln("Cameras not found in room")
-		return nil
-	}
-	_, ok = cameras[info.Camera]
-	if !ok {
-		glog.Infoln("Camera not found in room")
-		return nil
-	}
-	res, err := h.WaitForProcess(info.Reciever)
-	if err != nil {
-		glog.Infoln("Wait for process:", err)
-		return nil
-	}
-	cmd := fmt.Sprintf(`{
-		"name":"CreateSignalingConnection",
-		"from":%d,
-		"content":{
-			"camera":"%s", "reciever":"%s"
-		}
-	}`, info.Room, info.Camera, info.Reciever)
-	room.Send([]byte(cmd))
-	return res
-}
-
-type regRoomData struct {
-	Name string `json:"name"`
-}
-
-func HandleManyRegRoom(h conn.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		var data regRoomData
-		if err := c.Bind(&data); err != nil {
-			glog.Infoln(err)
-			c.JSON(http.StatusBadRequest, Err("User bind err"))
-			return
-		}
-
-		one := One{SecretAddress: NewUUID()}
-		one.Name = data.Name
-		if err := c.Keys[conn.UserKey].(*Oauth).Account.RegOne(&one); err != nil {
-			c.JSON(http.StatusInternalServerError, Err("Reg err"))
-			return
-		}
-		c.JSON(http.StatusOK, OK(one.SecretAddress))
-	}
-}
-
-func HandleManyLogoff(h conn.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		iuser, ok := c.Get(conn.UserKey)
-		if !ok {
-			c.JSON(http.StatusForbidden, `{"error":1,"content":"user not authed"}`)
-			return
-		}
-		if err := iuser.(*Oauth).Account.Logoff(); err != nil {
-			c.JSON(http.StatusInternalServerError, `{"error":1,"content":"cannot del user"}`)
-			return
-		}
-		c.JSON(http.StatusOK, `{"error":0,"content":"log off ok"}`)
 	}
 }

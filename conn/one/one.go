@@ -7,17 +7,14 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
 
 	. "github.com/empirefox/ic-server-conductor/account"
 	"github.com/empirefox/ic-server-conductor/conn"
-	. "github.com/empirefox/ic-server-conductor/utils"
-)
-
-const (
-	GinKeyOne = "one"
+	"github.com/empirefox/ic-server-conductor/utils"
 )
 
 var (
@@ -31,15 +28,17 @@ type controlRoom struct {
 	onlines map[uint]conn.ControlUser
 	send    chan []byte
 	hub     conn.Hub
+	secret  interface{}
 }
 
-func newControlRoom(h conn.Hub, ws *websocket.Conn) *controlRoom {
+func newControlRoom(h conn.Hub, ws *websocket.Conn, secret interface{}) *controlRoom {
 	return &controlRoom{
 		Conn:    ws,
 		hub:     h,
 		ipcams:  make(conn.Ipcams),
 		send:    make(chan []byte, 64),
 		onlines: make(map[uint]conn.ControlUser),
+		secret:  secret,
 	}
 }
 
@@ -91,6 +90,10 @@ func (room *controlRoom) RemoveOnline(id uint) {
 	if room.onlines != nil {
 		delete(room.onlines, id)
 	}
+}
+
+func (room *controlRoom) keyFunc(token *jwt.Token) (interface{}, error) {
+	return room.secret, nil
 }
 
 // no ping
@@ -168,34 +171,101 @@ func (room *controlRoom) onReadAuthed(typ, content []byte) {
 func (room *controlRoom) onReadNotAuthed(typ, content []byte) {
 	switch string(typ) {
 	case "Login":
-		room.onLogin(content)
+		room.send <- []byte(fmt.Sprintf(`{"name":"%s"}`, room.onLogin(content)))
+	case "RegRoom":
+		n, c := room.onRegRoom(content)
+		room.send <- []byte(fmt.Sprintf(`{"name":"%s","content":"%s"}`, n, c))
 	default:
 		glog.Errorln("Unknow command json:", string(typ), string(content))
 	}
 }
 
-func (room *controlRoom) onLogin(addr []byte) {
+type regRoomData struct {
+	Name string `json:"name"`
+}
+
+func (room *controlRoom) onRegRoom(regInfo []byte) (res, roomToken string) {
+	res = "BadRegToken"
+	// [regToken]:[json]
+	raws := bytes.SplitN(regInfo, []byte{':'}, 2)
+	if len(raws) < 2 {
+		glog.Errorln("No transfer data from one")
+		return
+	}
+	regToken, err := jwt.Parse(string(raws[0]), room.keyFunc)
+	if err != nil || !regToken.Valid {
+		glog.Infoln("Token is not valid:", err)
+		return
+	}
+
+	var data regRoomData
+	if err = json.Unmarshal(raws[1], &data); err != nil {
+		glog.Infoln("Unmarshal err", err)
+		return
+	}
+
+	claims := regToken.Claims
+	o := &Oauth{}
+	if err = o.FindOauth(claims["provider"].(string), claims["oid"].(string)); err != nil {
+		glog.Infoln("FindOauth:", err)
+		return
+	}
+
+	res = "RegError"
+	one := &One{SecretAddress: utils.NewRandom()}
+	one.Name = data.Name
+	if err = o.Account.RegOne(one); err != nil {
+		glog.Infoln("RegOne:", err)
+		return
+	}
+	if err = one.Find([]byte(one.SecretAddress)); err != nil {
+		glog.Infoln("Find:", err)
+		return
+	}
+
+	token := jwt.New(regToken.Method)
+	token.Header["kid"] = regToken.Header["kid"]
+	token.Claims["addr"] = one.SecretAddress
+	token.Claims["id"] = one.ID
+	roomToken, err = token.SignedString(room.secret)
+	if err != nil {
+		glog.Infoln("SignedString:", err)
+		return
+	}
+
+	res = "SetRoomToken"
+	return
+}
+
+func (room *controlRoom) onLogin(tokenBytes []byte) (res string) {
+	res = "BadRoomToken"
+	token, err := jwt.Parse(string(tokenBytes), room.keyFunc)
+	if err != nil || !token.Valid {
+		glog.Infoln("Token is not valid")
+		return
+	}
+
+	addr := []byte(token.Claims["addr"].(string))
 	one := &One{}
-	if err := one.Find(addr); err != nil {
-		glog.Errorln(err, string(addr))
-		room.send <- []byte(`{"name":"LoginAddrError"}`)
+	if err := one.Find(addr); err != nil && one.ID != token.Claims["id"].(uint) {
+		glog.Errorln(err, token.Claims)
 		return
 	}
 	room.One = one
 	room.hub.OnReg(room)
-	room.send <- []byte(`{"name":"LoginAddrOk"}`)
+	return "LoginOk"
 }
 
-func HandleOneCtrl(h conn.Hub) gin.HandlerFunc {
+func HandleOneCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
+		ws, err := utils.Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
 			glog.Errorln(err)
 			return
 		}
 		defer ws.Close()
 
-		room := newControlRoom(h, ws)
+		room := newControlRoom(h, ws, secret)
 		defer func() {
 			h.OnUnreg(room)
 			room.Broadcast([]byte(fmt.Sprintf(`{"type":"RoomOffline","content":%d}`, room.Id())))
@@ -245,23 +315,5 @@ func onOneIpcams(room *controlRoom, info []byte) {
 	room.ipcams = ipcams
 	for _, ctrl := range room.onlines {
 		ctrl.SendIpcams()
-	}
-}
-
-func HandleOneSignaling(h conn.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		res, err := h.ProcessFromWait(c.Params.ByName("reciever"))
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
-		if err != nil {
-			glog.Errorln(err)
-			return
-		}
-		defer ws.Close()
-		res <- ws
-		<-res
 	}
 }

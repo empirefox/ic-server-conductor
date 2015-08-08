@@ -39,6 +39,7 @@ type AccountService interface {
 	SaveOauthProvider(op *OauthProvider) error
 
 	OnOid(o *Oauth, provider, oid string) error
+	FindOauth(o *Oauth, provider, oid string) error
 	Permitted(o *Oauth, c *gin.Context) bool
 	Valid(o *Oauth) bool
 	CanView(o *Oauth, one *One) bool
@@ -53,6 +54,7 @@ type AccountService interface {
 	FindOneIfOwner(o *One, id, ownerId uint) error
 	Save(o *One) error
 	Viewers(o *One) error
+	Delete(o *One) error
 }
 
 func NewAccountService() AccountService {
@@ -153,13 +155,25 @@ func (accountService) Viewers(o *One) error {
 	return DB.Model(o).Association("Accounts").Find(&o.Accounts).Error
 }
 
+func (accountService) Delete(o *One) error {
+	return DB.Delete(o).Error
+}
+
 func (accountService) OnOid(o *Oauth, provider, oid string) error {
 	if provider == "" || oid == "" {
 		return ErrParamsRequired
 	}
 	return DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
-		Attrs(Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
+		Attrs(&Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
+}
+
+func (accountService) FindOauth(o *Oauth, provider, oid string) error {
+	if provider == "" || oid == "" {
+		return ErrParamsRequired
+	}
+	return DB.Debug().Where(&Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
+		Preload("Account").First(o).Error
 }
 
 func (accountService) Permitted(o *Oauth, c *gin.Context) bool { return o.Validated }
@@ -167,7 +181,7 @@ func (accountService) Permitted(o *Oauth, c *gin.Context) bool { return o.Valida
 func (accountService) Valid(o *Oauth) bool { return o.Enabled && o.Account.Enabled }
 
 func (accountService) CanView(o *Oauth, one *One) bool {
-	r := AccountOne{
+	r := &AccountOne{
 		AccountId: o.AccountId,
 		OneId:     one.ID,
 	}

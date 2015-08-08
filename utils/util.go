@@ -39,10 +39,10 @@ var (
 			}
 			u, err := url.Parse(origin[0])
 			if err != nil {
-				glog.Infoln(u.Host, r.Host)
 				return false
 			}
-			return u.Host == r.Host || u.Host == paas.SubDomain || strings.HasSuffix(u.Host, ".luck2.me")
+			o := strings.Split(u.Host, ":")[0]
+			return o == paas.SubDomain || strings.HasSuffix(o, ".luck2.me") || o == strings.Split(r.Host, ":")[0]
 		},
 	}
 
@@ -88,7 +88,7 @@ func GetNamedCmd(from uint, name, cmd []byte) []byte {
 	return []byte(fmt.Sprintf(`{"from":%d,"name":"%s","content":%s}`, from, name, cmd))
 }
 
-func NewUUID() string {
+func NewRandom() string {
 	return uniuri.NewLen(36)
 }
 

@@ -1,6 +1,9 @@
 package conn
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 // copy from client one
 type Ipcam struct {
@@ -45,4 +48,8 @@ type ManyCommand struct {
 	Name    string          `json:"name,omitempty"`
 	Room    uint            `json:"room,omitempty"`
 	Content json.RawMessage `json:"content,omitempty"`
+}
+
+func (c *ManyCommand) Value() []byte {
+	return bytes.Trim(c.Content, `"`)
 }
