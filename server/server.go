@@ -35,6 +35,10 @@ type Server struct {
 	OnEngineCreated func(*gin.Engine)
 }
 
+func (s *Server) Ok(c *gin.Context) {
+	c.AbortWithStatus(http.StatusOK)
+}
+
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	conn.UserKey = s.UserKey
@@ -94,10 +98,13 @@ func (s *Server) Run() error {
 
 	// many rest
 	rm := router.Group("/many", corsMiddleWare, s.Auth(SK_MANY), s.CheckManyUser)
+	rm.OPTIONS("/logoff", s.Ok)
 	rm.DELETE("/logoff", DeleteManyLogoff)
-	rm.GET("/invite-code/:room", invite.HandleManyGetInviteCode(s.Hub))
-	rm.GET("/invite/:room/:code", invite.HandleManyOnInvite(s.Hub))
-	rm.POST("/refresh-token", func(c *gin.Context) { c.JSON(http.StatusOK, "") })
+	rm.OPTIONS("/invite-code", s.Ok)
+	rm.POST("/invite-code", invite.HandleManyGetInviteCode(s.Hub))
+	rm.OPTIONS("/invite-join", s.Ok)
+	rm.POST("/invite-join", invite.HandleManyOnInvite(s.Hub))
+	rm.POST("/refresh-token", s.Ok)
 
 	return router.Run(paas.GetBindAddr())
 }

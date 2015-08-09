@@ -72,6 +72,11 @@ func (s *Server) WsManySignaling(c *gin.Context) {
 	if res == nil {
 		return
 	}
+	err = ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Accepted"}`))
+	if err != nil {
+		s.Hub.ProcessFromWait(info.Reciever)
+		return
+	}
 	var resWs *websocket.Conn
 	select {
 	case resWs = <-res:
@@ -91,6 +96,10 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 		return nil
 	}
 	if !o.CanView(room.GetOne()) {
+		b1, _ := json.MarshalIndent(o, "", "\t")
+		b2, _ := json.MarshalIndent(room.GetOne(), "", "\t")
+		glog.Infoln(string(b1))
+		glog.Infoln(string(b2))
 		glog.Infoln("Not permited to view this room")
 		return nil
 	}

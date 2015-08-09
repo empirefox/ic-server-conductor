@@ -2,7 +2,6 @@ package invite
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
@@ -11,45 +10,55 @@ import (
 	. "github.com/empirefox/ic-server-conductor/conn"
 )
 
+type getInviteCodeData struct {
+	Room uint `json:"room"`
+}
+
 func HandleManyGetInviteCode(h Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
-		if err != nil {
+		var data getInviteCodeData
+		if err := c.BindJSON(&data); err != nil {
 			glog.Infoln("No room set in context:", err)
+			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
 		user := c.Keys[UserKey].(*Oauth).Account
 		one := &One{}
-		if err := one.FindIfOwner(uint(roomId), user.ID); err != nil {
+		if err := one.FindIfOwner(data.Room, user.ID); err != nil {
 			glog.Infoln("Not the owner of the room:", err)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
-			"room": roomId,
-			"code": h.NewInviteCode(uint(roomId)),
+			"room": data.Room,
+			"code": h.NewInviteCode(data.Room),
 		})
 	}
 }
 
+type onInviteData struct {
+	Room uint   `json:"room"`
+	Code string `json:"code"`
+}
+
 func onManyInvite(h Hub, c *gin.Context) (ok bool) {
-	roomId, err := strconv.ParseInt(c.Params.ByName("room"), 10, 0)
-	if err != nil {
-		glog.Infoln("No room set in context:", err)
+	var data onInviteData
+	if err := c.BindJSON(&data); err != nil {
+		glog.Infoln("Get on-invite data:", err)
 		return
+
 	}
-	room := uint(roomId)
-	if !h.ValidateInviteCode(room, c.Params.ByName("code")) {
-		glog.Infoln("Invalid invite code:", err)
+	if !h.ValidateInviteCode(data.Room, data.Code) {
+		glog.Infoln("Invalid invite code")
 		return
 	}
 	one := &One{}
-	if err := one.FindIfOwner(room, 0); err != nil {
+	if err := one.FindIfOwner(data.Room, 0); err != nil {
 		glog.Infoln("Room not found:", err)
 		return
 	}
 	user := c.Keys[UserKey].(*Oauth).Account
 	if one.OwnerId == user.ID {
-		glog.Infoln("Cannot invite to your own room:", err)
+		glog.Infoln("Cannot invite to your own room")
 		return
 	}
 	if err := user.ViewOne(one); err != nil {
@@ -61,10 +70,10 @@ func onManyInvite(h Hub, c *gin.Context) (ok bool) {
 
 func HandleManyOnInvite(h Hub) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if onManyInvite(h, c) {
-			c.JSON(http.StatusOK, "")
+		if !onManyInvite(h, c) {
+			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		c.JSON(http.StatusBadRequest, "")
+		c.AbortWithStatus(http.StatusOK)
 	}
 }

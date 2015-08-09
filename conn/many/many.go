@@ -187,7 +187,9 @@ func AuthMws(ws conn.Ws, secret interface{}) (*Oauth, error) {
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth failed"}`))
 		return nil, err
 	}
-	ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Login","content":1}`))
+	if err = ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Login","content":1}`)); err != nil {
+		return nil, err
+	}
 	return o, nil
 }
 

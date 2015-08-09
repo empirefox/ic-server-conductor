@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
@@ -212,21 +213,22 @@ func (room *controlRoom) onRegRoom(regInfo []byte) (res, roomToken string) {
 	}
 
 	res = "RegError"
-	one := &One{SecretAddress: utils.NewRandom()}
+	one := &One{Addr: utils.NewRandom()}
 	one.Name = data.Name
 	if err = o.Account.RegOne(one); err != nil {
 		glog.Infoln("RegOne:", err)
 		return
 	}
-	if err = one.Find([]byte(one.SecretAddress)); err != nil {
+	if err = one.Find([]byte(one.Addr)); err != nil {
 		glog.Infoln("Find:", err)
 		return
 	}
 
 	token := jwt.New(regToken.Method)
 	token.Header["kid"] = regToken.Header["kid"]
-	token.Claims["addr"] = one.SecretAddress
+	token.Claims["addr"] = one.Addr
 	token.Claims["id"] = one.ID
+	token.Claims["crt"] = time.Now().Unix()
 	roomToken, err = token.SignedString(room.secret)
 	if err != nil {
 		glog.Infoln("SignedString:", err)

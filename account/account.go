@@ -74,11 +74,11 @@ func (a *Account) Logoff() error { return aservice.Logoff(a) }
 // One must be added under an exist Account
 type One struct {
 	BaseModel
-	SecretAddress string    `json:",omitempty" binding:"required" sql:"not null;type:varchar(128);unique"`
-	Enabled       bool      `json:",omitempty"                    sql:"default:true"`
-	Owner         Account   `json:",omitempty"`
-	OwnerId       uint      `json:",omitempty"`
-	Accounts      []Account `json:"-"                             gorm:"many2many:account_ones;"`
+	Addr     string    `json:",omitempty" binding:"required" sql:"not null;type:varchar(128);unique"`
+	Enabled  bool      `json:",omitempty"                    sql:"default:true"`
+	Owner    Account   `json:",omitempty"`
+	OwnerId  uint      `json:",omitempty"`
+	Accounts []Account `json:"-"                             gorm:"many2many:account_ones;"`
 }
 
 func (o *One) Find(addr []byte) error             { return aservice.FindOne(o, addr) }

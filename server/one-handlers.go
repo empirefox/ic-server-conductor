@@ -44,20 +44,20 @@ func (s *Server) PostRegRoom(c *gin.Context) {
 		return
 	}
 
-	one := &account.One{SecretAddress: utils.NewRandom()}
+	one := &account.One{Addr: utils.NewRandom()}
 	one.Name = data.Name
 	if err := o.Account.RegOne(one); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	if err := one.Find([]byte(one.SecretAddress)); err != nil {
+	if err := one.Find([]byte(one.Addr)); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 
 	token := jwt.New(s.Alg)
 	token.Header["kid"] = SK_ONE
-	token.Claims["addr"] = one.SecretAddress
+	token.Claims["addr"] = one.Addr
 	token.Claims["id"] = one.ID
 	tokenString, err := token.SignedString(s.Keys[SK_ONE])
 	if err != nil {

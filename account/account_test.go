@@ -47,7 +47,6 @@ func TestOauth_OnOid(t *testing.T) {
 			err = o2.OnOid("L2m", "oauth-oid2")
 			So(err, ShouldBeNil)
 			So(o2.ID, ShouldEqual, o.ID)
-			So(o2.AccountId, ShouldEqual, o.Account.ID)
 			So(o2.Account.Name, ShouldEqual, o.Account.Name)
 			So(DB.NewRecord(o2), ShouldBeFalse)
 		})
@@ -64,11 +63,11 @@ func TestAccount(t *testing.T) {
 			err := DB.Save(a).Error
 			So(err, ShouldBeNil)
 
-			err = a.RegOne(&One{SecretAddress: addr, BaseModel: BaseModel{Name: "NewOne1"}})
+			err = a.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne1"}})
 			So(err, ShouldBeNil)
 
 			var one One
-			err = DB.Where("secret_address=? and name=?", addr, "NewOne1").Preload("Owner").First(&one).Error
+			err = DB.Where("addr=? and name=?", addr, "NewOne1").Preload("Owner").First(&one).Error
 			So(err, ShouldBeNil)
 			So(one.Owner.ID, ShouldEqual, a.ID)
 		})
@@ -80,7 +79,7 @@ func TestAccount(t *testing.T) {
 			err := DB.Save(owner).Error
 			So(err, ShouldBeNil)
 			// init One
-			err = owner.RegOne(&One{SecretAddress: addr, BaseModel: BaseModel{Name: "NewOne2"}})
+			err = owner.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne2"}})
 			So(err, ShouldBeNil)
 			// init viewer
 			viewer := &Account{}
@@ -103,7 +102,7 @@ func TestAccount(t *testing.T) {
 			So(err, ShouldBeNil)
 			// validate One
 			var result One
-			notfound := DB.Where("secret_address=?", addr).First(&result).RecordNotFound()
+			notfound := DB.Where("addr=?", addr).First(&result).RecordNotFound()
 			So(notfound, ShouldBeTrue)
 			// validate viewer
 			viewer.Ones = []One{}
@@ -124,7 +123,7 @@ func TestAccount(t *testing.T) {
 			err := DB.Save(owner).Error
 			So(err, ShouldBeNil)
 			// init One
-			err = owner.RegOne(&One{SecretAddress: addr, BaseModel: BaseModel{Name: "NewOne5"}})
+			err = owner.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne5"}})
 			So(err, ShouldBeNil)
 			// init viewer
 			viewer := &Account{}
@@ -147,7 +146,7 @@ func TestAccount(t *testing.T) {
 			So(err, ShouldBeNil)
 			// validate One
 			var result One
-			notfound := DB.Where("secret_address=?", addr).First(&result).RecordNotFound()
+			notfound := DB.Where("addr=?", addr).First(&result).RecordNotFound()
 			So(notfound, ShouldBeFalse)
 			// validate viewer
 			viewer.Ones = []One{}
@@ -173,15 +172,17 @@ func TestOne_Find(t *testing.T) {
 			err := DB.Save(a).Error
 			So(err, ShouldBeNil)
 
-			err = a.RegOne(&One{SecretAddress: addr, BaseModel: BaseModel{Name: "NewOne3"}})
+			err = a.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne3"}})
 			So(err, ShouldBeNil)
 
 			var one One
 			err = one.Find([]byte(addr))
 			So(err, ShouldBeNil)
 			So(one.OwnerId, ShouldEqual, a.ID)
-			So(one.SecretAddress, ShouldEqual, addr)
+			So(one.Addr, ShouldEqual, addr)
 			So(one.Name, ShouldEqual, "NewOne3")
+			err = one.Viewers()
+			So(err, ShouldBeNil)
 			So(one.Accounts[0].ID, ShouldEqual, a.ID)
 		})
 	})
@@ -197,7 +198,7 @@ func TestOauth_CanView(t *testing.T) {
 			So(err, ShouldBeNil)
 
 			// reg one then find one will ok
-			one := &One{SecretAddress: "addr"}
+			one := &One{Addr: "addr"}
 			err = oauth.Account.RegOne(one)
 			So(err, ShouldBeNil)
 			err = one.Find([]byte("addr"))

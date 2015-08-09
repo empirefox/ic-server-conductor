@@ -93,7 +93,10 @@ func (accountService) Logoff(a *Account) error {
 }
 
 func (accountService) GetOnes(a *Account) error {
-	return DB.Model(a).Association("Ones").Find(&a.Ones).Error
+	ones := []One{}
+	err := DB.Model(a).Association("Ones").Find(&ones).Error
+	a.Ones = ones
+	return err
 }
 
 // one must be non-exist record
@@ -136,7 +139,7 @@ func (accountService) RemoveOne(a *Account, one *One) error {
 
 func (accountService) FindOne(o *One, addr []byte) error {
 	var w One
-	w.SecretAddress = string(addr)
+	w.Addr = string(addr)
 	return DB.Where(w).Preload("Owner").First(o).Error
 }
 
@@ -152,7 +155,10 @@ func (accountService) Save(o *One) error {
 }
 
 func (accountService) Viewers(o *One) error {
-	return DB.Model(o).Association("Accounts").Find(&o.Accounts).Error
+	viewers := []Account{}
+	err := DB.Model(o).Association("Accounts").Find(&viewers).Error
+	o.Accounts = viewers
+	return err
 }
 
 func (accountService) Delete(o *One) error {
@@ -163,7 +169,7 @@ func (accountService) OnOid(o *Oauth, provider, oid string) error {
 	if provider == "" || oid == "" {
 		return ErrParamsRequired
 	}
-	return DB.Where(Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
+	return DB.Where(&Oauth{Provider: provider, Oid: oid, Validated: true, Enabled: true}).
 		Attrs(&Oauth{Account: Account{BaseModel: BaseModel{Name: provider + oid}, Enabled: true}}).
 		Preload("Account").FirstOrCreate(o).Error
 }
@@ -182,7 +188,7 @@ func (accountService) Valid(o *Oauth) bool { return o.Enabled && o.Account.Enabl
 
 func (accountService) CanView(o *Oauth, one *One) bool {
 	r := &AccountOne{
-		AccountId: o.AccountId,
+		AccountId: o.Account.ID,
 		OneId:     one.ID,
 	}
 	var count uint

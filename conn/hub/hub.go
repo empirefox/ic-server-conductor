@@ -202,7 +202,7 @@ func (h *hub) waitForStop(cs codes, code string, stop chan bool) {
 	}
 	select {
 	case <-stop:
-	case <-time.After(time.Minute * 10):
+	case <-time.After(time.Minute * 5):
 	}
 	h.inviteMutex.Lock()
 	defer h.inviteMutex.Unlock()
