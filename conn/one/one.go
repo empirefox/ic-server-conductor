@@ -146,7 +146,7 @@ func (room *controlRoom) readPump() {
 func (room *controlRoom) onRead(typ, content []byte) {
 	defer func() {
 		if err := recover(); err != nil {
-			glog.Infof("read from one, authed:%t, type:%s, content:%s, err:%v\n", typ, content, err)
+			glog.Infof("read from one, authed:%s, type:%s, content:%s, err:%v\n", typ, content, err)
 		}
 	}()
 	if room.One != nil {
@@ -249,8 +249,8 @@ func (room *controlRoom) onLogin(tokenBytes []byte) (res string) {
 
 	addr := []byte(token.Claims["addr"].(string))
 	one := &One{}
-	if err := one.Find(addr); err != nil && one.ID != token.Claims["id"].(uint) {
-		glog.Errorln(err, token.Claims)
+	if err := one.Find(addr); err != nil && one.ID != uint(token.Claims["id"].(float64)) {
+		glog.Infoln(err, token.Claims)
 		return
 	}
 	room.One = one
