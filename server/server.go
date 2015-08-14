@@ -70,8 +70,8 @@ func (s *Server) Run() error {
 
 	// peer from MANY client
 	router.GET("/sys-data.js", s.GetSystemData)
-	router.GET("/auth/oauths", func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
-	router.OPTIONS("/auth/oauths", corsMiddleWare)
+	router.GET("/auth/oauths", corsMiddleWare, func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
+	router.OPTIONS("/auth/oauths", corsMiddleWare, s.Ok)
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
 	sys.POST("/clear-tables", s.PostClearTables)
