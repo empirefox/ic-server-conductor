@@ -304,7 +304,7 @@ func onServerCommand(room *controlRoom, command []byte) {
 		if err := room.Owner.RemoveOne(room.One); err != nil {
 			glog.Errorln(err)
 		}
-		room.send <- []byte(`{"name":"LoginAddrError"}`)
+		room.send <- []byte(`{"name":"BadRoomToken"}`)
 	}
 }
 

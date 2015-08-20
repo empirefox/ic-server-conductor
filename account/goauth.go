@@ -17,7 +17,7 @@ type OauthProvider struct {
 	Scopes       string `json:",omitempty"                    sql:"type:varchar(255);default:''"`
 	UserEndpoint string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 	OidJsonPath  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	Enabled      bool   `json:",omitempty"                    sql:"default:true"`
+	Enabled      bool   `json:",omitempty"                    sql:"default:false"`
 
 	Css string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
 }

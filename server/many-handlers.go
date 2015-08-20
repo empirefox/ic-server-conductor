@@ -142,6 +142,37 @@ func (s *Server) GetCheckToken() gin.HandlerFunc {
 	}
 }
 
+func (s *Server) PostAssociate(c *gin.Context) {
+	o := &account.Oauth{}
+	if err := c.BindJSON(o); err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+	if err := c.Keys[s.UserKey].(*account.Oauth).Associate(o); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, `{"error":0,"content":"Associate ok"}`)
+}
+
+func (s *Server) DeleteUnAssociate(c *gin.Context) {
+	if err := c.Keys[s.UserKey].(*account.Oauth).UnAssociate(c.Param("provider")); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, `{"error":0,"content":"UnAssociate ok"}`)
+}
+
+func (s *Server) GetAccountProviders(c *gin.Context) {
+	o := c.Keys[s.UserKey].(*account.Oauth)
+	ps := []string{}
+	if err := o.GetProviders(&ps); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"current": o.Provider, "providers": ps})
+}
+
 func DeleteManyLogoff(c *gin.Context) {
 	iuser, ok := c.Get(conn.UserKey)
 	if !ok {

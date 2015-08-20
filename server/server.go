@@ -99,6 +99,12 @@ func (s *Server) Run() error {
 
 	// many rest
 	rm := router.Group("/many", corsMiddleWare, s.Auth(SK_MANY), s.CheckManyUser)
+	rm.OPTIONS("/associate", s.Ok)
+	rm.POST("/associate", s.PostAssociate)
+	rm.OPTIONS("/unassociate/:p", s.Ok)
+	rm.DELETE("/unassociate/:provider", s.DeleteUnAssociate)
+	rm.OPTIONS("/myproviders", s.Ok)
+	rm.GET("/myproviders", s.GetAccountProviders)
 	rm.OPTIONS("/logoff", s.Ok)
 	rm.DELETE("/logoff", DeleteManyLogoff)
 	rm.OPTIONS("/invite-code", s.Ok)

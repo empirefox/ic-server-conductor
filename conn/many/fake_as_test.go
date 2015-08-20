@@ -23,11 +23,12 @@ func (s fakeService) Permitted(o *Oauth, c *gin.Context) bool    { return true }
 func (s fakeService) Valid(o *Oauth) bool                        { return true }
 func (s fakeService) CanView(o *Oauth, one *One) bool            { return true }
 
-func (s fakeService) GetOnes(a *Account) error           { a.Ones = s.dataGetOnes; return nil }
-func (s fakeService) RegOne(a *Account, o *One) error    { return nil }
-func (s fakeService) ViewOne(a *Account, o *One) error   { return nil }
-func (s fakeService) RemoveOne(a *Account, o *One) error { return nil }
-func (s fakeService) Logoff(a *Account) error            { return nil }
+func (s fakeService) GetOnes(a *Account) error             { a.Ones = s.dataGetOnes; return nil }
+func (s fakeService) RegOne(a *Account, o *One) error      { return nil }
+func (s fakeService) ViewOne(a *Account, o *One) error     { return nil }
+func (s fakeService) RemoveOne(a *Account, o *One) error   { return nil }
+func (s fakeService) Associate(a *Account, o *Oauth) error { return nil }
+func (s fakeService) Logoff(a *Account) error              { return nil }
 
 func (s fakeService) FindOne(o *One, addr []byte) error             { *o = s.dataFindOne; return nil }
 func (s fakeService) FindOneIfOwner(o *One, id, ownerId uint) error { return nil }

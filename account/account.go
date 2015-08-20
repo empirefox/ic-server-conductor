@@ -1,9 +1,15 @@
 package account
 
 import (
+	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
+)
+
+var (
+	ErrAssociateSelf   = errors.New("Cannot associate account with self")
+	ErrUnAssociateSelf = errors.New("Cannot unassociate account with self")
 )
 
 type BaseModel struct {
@@ -39,6 +45,21 @@ func (o *Oauth) Valid() bool                          { return aservice.Valid(o)
 func (o *Oauth) GetOnes() error                       { return o.Account.GetOnes() }
 func (o *Oauth) CanView(one *One) bool                { return aservice.CanView(o, one) }
 
+func (o *Oauth) Associate(o2 *Oauth) error {
+	if o.Provider == o2.Provider {
+		return ErrAssociateSelf
+	}
+	return o.Account.Associate(o2)
+}
+func (o *Oauth) UnAssociate(p string) error {
+	if o.Provider == p {
+		return ErrUnAssociateSelf
+	}
+	return o.Account.UnAssociate(p)
+}
+
+func (o *Oauth) GetProviders(ps *[]string) error { return o.Account.GetProviders(ps) }
+
 /////////////////////////////////////////
 //                Account
 /////////////////////////////////////////
@@ -64,6 +85,15 @@ func (a *Account) ViewOne(o *One) error { return aservice.ViewOne(a, o) }
 // one must be exist record
 // a   must be from Oauth.OnOid
 func (a *Account) RemoveOne(o *One) error { return aservice.RemoveOne(a, o) }
+
+// a   must be from Oauth.OnOid
+func (a *Account) Associate(o *Oauth) error { return aservice.Associate(a, o) }
+
+// a   must be from Oauth.OnOid
+func (a *Account) UnAssociate(p string) error { return aservice.UnAssociate(a, p) }
+
+// a   must be from Oauth.OnOid
+func (a *Account) GetProviders(ps *[]string) error { return aservice.AccountProviders(a, ps) }
 
 func (a *Account) Logoff() error { return aservice.Logoff(a) }
 

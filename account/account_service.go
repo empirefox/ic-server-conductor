@@ -48,6 +48,9 @@ type AccountService interface {
 	RegOne(a *Account, o *One) error
 	ViewOne(a *Account, o *One) error
 	RemoveOne(a *Account, o *One) error
+	Associate(a *Account, o *Oauth) error
+	UnAssociate(a *Account, p string) error
+	AccountProviders(a *Account, ps *[]string) error
 	Logoff(a *Account) error
 
 	FindOne(o *One, addr []byte) error
@@ -81,11 +84,25 @@ func (accountService) DropTables() error {
 }
 
 func (accountService) FindOauthProviders(ops *OauthProviders) error {
-	return DB.Where(OauthProvider{Enabled: true}).Find(ops).Error
+	return DB.Where(&OauthProvider{Enabled: true}).Find(ops).Error
 }
 
 func (accountService) SaveOauthProvider(op *OauthProvider) error {
 	return DB.Save(op).Error
+}
+
+func (accountService) Associate(a *Account, o *Oauth) error {
+	return DB.Model(a).Association("Oauths").Append(o).Error
+}
+
+func (accountService) UnAssociate(a *Account, p string) error {
+	w := &Oauth{AccountId: a.ID}
+	return DB.Delete(w, w).Error
+}
+
+func (accountService) AccountProviders(a *Account, ps *[]string) error {
+	w := &Oauth{AccountId: a.ID}
+	return DB.Model(w).Where(w).Pluck("providers", ps).Error
 }
 
 func (accountService) Logoff(a *Account) error {
