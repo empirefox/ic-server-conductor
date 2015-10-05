@@ -4,46 +4,45 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
 	"github.com/itsjamie/gin-cors"
 
+	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
+	"github.com/empirefox/ic-server-conductor/account"
 	"github.com/empirefox/ic-server-conductor/conn"
 	"github.com/empirefox/ic-server-conductor/conn/many"
 	"github.com/empirefox/ic-server-conductor/conn/one"
 	"github.com/empirefox/ic-server-conductor/invite"
+	"github.com/empirefox/ic-server-conductor/utils"
 )
 
 const (
-	SK_CALL = "call"
-	SK_MANY = "many"
-	SK_ONE  = "one"
-	SK_SYS  = "system"
+	SK_SYS = "system"
 )
 
 type Server struct {
 	ClaimsKey       string
 	UserKey         string
-	Alg             jwt.SigningMethod
+	OneAlg          string
 	Keys            map[string][]byte
 	Hub             conn.Hub
 	OauthJson       []byte
 	IsDevMode       bool
 	OnEngineCreated func(*gin.Engine)
+	goauthConfig    *goauth.Config
 }
 
-func (s *Server) Ok(c *gin.Context) {
-	c.AbortWithStatus(http.StatusOK)
-}
+func (s *Server) Ok(c *gin.Context)       { c.AbortWithStatus(http.StatusOK) }
+func (s *Server) NotFound(c *gin.Context) { c.AbortWithStatus(http.StatusNotFound) }
 
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	conn.UserKey = s.UserKey
 	corsMiddleWare := cors.Middleware(cors.Config{
-		Origins:         "*",
+		Origins:         utils.GetEnv("ORIGINS", "*"),
 		Methods:         "GET, PUT, POST, DELETE",
 		RequestHeaders:  "Origin, Authorization, Content-Type",
 		ExposedHeaders:  "",
@@ -51,6 +50,13 @@ func (s *Server) Run() error {
 		Credentials:     false,
 		ValidateHeaders: false,
 	})
+
+	providers, _ := account.GoauthProviders()
+	s.goauthConfig = &goauth.Config{
+		Providers:   providers,
+		NewUserFunc: func() goauth.OauthUser { return &account.Oauth{} },
+	}
+	authMiddleWare := goauth.Middleware(s.goauthConfig)
 
 	router := gin.Default()
 	if s.OnEngineCreated != nil {
@@ -70,48 +76,45 @@ func (s *Server) Run() error {
 
 	// peer from MANY client
 	router.GET("/sys-data.js", s.GetSystemData)
-	router.GET("/auth/oauths", corsMiddleWare, func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
-	router.OPTIONS("/auth/oauths", corsMiddleWare, s.Ok)
+	router.GET("/oauth/oauths", corsMiddleWare, func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
+	router.OPTIONS("/oauth/oauths", corsMiddleWare, s.Ok)
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
 	sys.POST("/clear-tables", s.PostClearTables)
 	sys.POST("/oauth", s.PostSaveOauth)
 
-	call := router.Group("/call", s.Auth(SK_CALL))
-	call.GET("/login", s.GetLogin)
-	call.GET("/providers", s.GetApiProviders)
-
 	// peer from ONE client
 	ro := router.Group("/one")
-	ro.GET("/ctrl", one.HandleOneCtrl(s.Hub, s.Keys[SK_ONE]))
+	ro.GET("/ctrl", one.HandleOneCtrl(s.Hub, s.OneAlg, s.Verify))
 	ro.GET("/signaling/:reciever", s.WsOneSignaling)
-
-	// one rest
-	ror := router.Group("/one-rest", s.Auth(SK_ONE))
-	// remove action will be performed among ctrl conn
-	ror.POST("/reg-room", s.PostRegRoom)
 
 	// websocket
 	// peer from MANY client
 	manyws := router.Group("/mws")
-	manyws.GET("/ctrl", many.HandleManyCtrl(s.Hub, s.Keys[SK_MANY]))
+	manyws.GET("/ctrl", many.HandleManyCtrl(s.Hub, s.Verify))
 	manyws.GET("/signaling", s.WsManySignaling)
 
 	// many rest
-	rm := router.Group("/many", corsMiddleWare, s.Auth(SK_MANY), s.CheckManyUser)
-	rm.OPTIONS("/associate", s.Ok)
-	rm.POST("/associate", s.PostAssociate)
-	rm.OPTIONS("/unassociate/:p", s.Ok)
-	rm.DELETE("/unassociate/:provider", s.DeleteUnAssociate)
+	rm := router.Group("/many", corsMiddleWare, authMiddleWare, s.goauthConfig.MustBindUser)
+	rm.OPTIONS("/unlink", s.Ok)
+	rm.DELETE("/unlink", s.goauthConfig.Unlink)
+	rm.OPTIONS("/logoff", s.Ok)
+	rm.DELETE("/logoff", s.goauthConfig.Logoff)
+	rm.OPTIONS("/new-token", s.Ok)
+	rm.POST("/new-token", s.PostNewToken)
 	rm.OPTIONS("/myproviders", s.Ok)
 	rm.GET("/myproviders", s.GetAccountProviders)
-	rm.OPTIONS("/logoff", s.Ok)
-	rm.DELETE("/logoff", DeleteManyLogoff)
 	rm.OPTIONS("/invite-code", s.Ok)
 	rm.POST("/invite-code", invite.HandleManyGetInviteCode(s.Hub))
 	rm.OPTIONS("/invite-join", s.Ok)
 	rm.POST("/invite-join", invite.HandleManyOnInvite(s.Hub))
-	rm.POST("/refresh-token", s.Ok)
+
+	// many and one login rest api
+	// compatible with Satellizer
+	for path := range providers {
+		router.POST(path, corsMiddleWare, authMiddleWare, s.Ok)
+		router.OPTIONS(path, s.Ok)
+	}
 
 	return router.Run(paas.GetBindAddr())
 }

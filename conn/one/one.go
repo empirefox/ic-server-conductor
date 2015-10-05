@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dchest/uniuri"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
@@ -25,21 +26,23 @@ var (
 type controlRoom struct {
 	*websocket.Conn
 	*One
-	ipcams  conn.Ipcams
-	onlines map[uint]conn.ControlUser
-	send    chan []byte
-	hub     conn.Hub
-	secret  interface{}
+	ipcams     conn.Ipcams
+	onlines    map[uint]conn.ControlUser
+	send       chan []byte
+	hub        conn.Hub
+	alg        string
+	manyVerify conn.VerifyFunc
 }
 
-func newControlRoom(h conn.Hub, ws *websocket.Conn, secret interface{}) *controlRoom {
+func newControlRoom(h conn.Hub, ws *websocket.Conn, alg string, manyVerify conn.VerifyFunc) *controlRoom {
 	return &controlRoom{
-		Conn:    ws,
-		hub:     h,
-		ipcams:  make(conn.Ipcams),
-		send:    make(chan []byte, 64),
-		onlines: make(map[uint]conn.ControlUser),
-		secret:  secret,
+		Conn:       ws,
+		hub:        h,
+		ipcams:     make(conn.Ipcams),
+		send:       make(chan []byte, 64),
+		onlines:    make(map[uint]conn.ControlUser),
+		alg:        alg,
+		manyVerify: manyVerify,
 	}
 }
 
@@ -93,8 +96,11 @@ func (room *controlRoom) RemoveOnline(id uint) {
 	}
 }
 
-func (room *controlRoom) keyFunc(token *jwt.Token) (interface{}, error) {
-	return room.secret, nil
+func (room *controlRoom) oneKeyFunc(token *jwt.Token) (interface{}, error) {
+	if room.One == nil {
+		return nil, ErrRoomNotAuthed
+	}
+	return []byte(room.One.Addr), nil
 }
 
 // no ping
@@ -187,51 +193,42 @@ type regRoomData struct {
 
 func (room *controlRoom) onRegRoom(regInfo []byte) (res, roomToken string) {
 	res = "BadRegToken"
+	// 1. Check msg format
 	// [regToken]:[json]
 	raws := bytes.SplitN(regInfo, []byte{':'}, 2)
 	if len(raws) < 2 {
 		glog.Errorln("No transfer data from one")
 		return
 	}
-	regToken, err := jwt.Parse(string(raws[0]), room.keyFunc)
-	if err != nil || !regToken.Valid {
-		glog.Infoln("Token is not valid:", err)
+	// 2. Validate RegToken with many secret
+	o := &Oauth{}
+	if err := room.manyVerify(o, raws[0]); err != nil {
+		glog.Infoln("manyVerify err:", err)
 		return
 	}
-
+	// 3. Parse RoomData
 	var data regRoomData
-	if err = json.Unmarshal(raws[1], &data); err != nil {
+	if err := json.Unmarshal(raws[1], &data); err != nil {
 		glog.Infoln("Unmarshal err", err)
 		return
 	}
-
-	claims := regToken.Claims
-	o := &Oauth{}
-	if err = o.FindOauth(claims["provider"].(string), claims["oid"].(string)); err != nil {
-		glog.Infoln("FindOauth:", err)
-		return
-	}
-
+	// 4. Reg Room
 	res = "RegError"
 	one := &One{Addr: utils.NewRandom()}
 	one.Name = data.Name
-	if err = o.Account.RegOne(one); err != nil {
-		glog.Infoln("RegOne:", err)
+	if err := o.Account.RegOne(one); err != nil {
+		glog.Infoln("RegOne err:", err)
 		return
 	}
-	if err = one.Find([]byte(one.Addr)); err != nil {
-		glog.Infoln("Find:", err)
-		return
-	}
-
-	token := jwt.New(regToken.Method)
-	token.Header["kid"] = regToken.Header["kid"]
-	token.Claims["addr"] = one.Addr
-	token.Claims["id"] = one.ID
-	token.Claims["crt"] = time.Now().Unix()
-	roomToken, err = token.SignedString(room.secret)
+	// 5. Generate RoomToken
+	token := jwt.New(jwt.GetSigningMethod(room.alg))
+	token.Claims["aid"] = strconv.FormatInt(int64(o.Account.ID), 36)
+	token.Claims["rid"] = strconv.FormatInt(int64(one.ID), 36)
+	token.Claims["iat"] = time.Now().Unix()
+	token.Claims["rnd"] = uniuri.New()
+	roomToken, err := token.SignedString([]byte(one.Addr))
 	if err != nil {
-		glog.Infoln("SignedString:", err)
+		glog.Infoln("SignedString err:", err)
 		return
 	}
 
@@ -241,15 +238,16 @@ func (room *controlRoom) onRegRoom(regInfo []byte) (res, roomToken string) {
 
 func (room *controlRoom) onLogin(tokenBytes []byte) (res string) {
 	res = "BadRoomToken"
-	token, err := jwt.Parse(string(tokenBytes), room.keyFunc)
+	token, err := jwt.Parse(string(tokenBytes), room.oneKeyFunc)
 	if err != nil || !token.Valid {
 		glog.Infoln("Token is not valid")
 		return
 	}
 
-	addr := []byte(token.Claims["addr"].(string))
 	one := &One{}
-	if err := one.Find(addr); err != nil && one.ID != uint(token.Claims["id"].(float64)) {
+	rid, _ := strconv.ParseInt(token.Claims["rid"].(string), 36, 64)
+	aid, _ := strconv.ParseInt(token.Claims["aid"].(string), 36, 64)
+	if err := one.FindIfOwner(uint(rid), uint(aid)); err != nil {
 		glog.Infoln(err, token.Claims)
 		return
 	}
@@ -258,7 +256,7 @@ func (room *controlRoom) onLogin(tokenBytes []byte) (res string) {
 	return "LoginOk"
 }
 
-func HandleOneCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
+func HandleOneCtrl(h conn.Hub, alg string, manyVerify conn.VerifyFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ws, err := utils.Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -267,7 +265,7 @@ func HandleOneCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
 		}
 		defer ws.Close()
 
-		room := newControlRoom(h, ws, secret)
+		room := newControlRoom(h, ws, alg, manyVerify)
 		defer func() {
 			h.OnUnreg(room)
 			room.Broadcast([]byte(fmt.Sprintf(`{"type":"RoomOffline","content":%d}`, room.Id())))
@@ -317,6 +315,6 @@ func onOneIpcams(room *controlRoom, info []byte) {
 	}
 	room.ipcams = ipcams
 	for _, ctrl := range room.onlines {
-		ctrl.SendIpcams()
+		ctrl.SendChangeRoomContent(room.Id(), info)
 	}
 }

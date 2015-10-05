@@ -25,6 +25,7 @@ type controlUser struct {
 	*Oauth
 	send chan []byte
 	hub  conn.Hub
+	Exp  time.Time
 }
 
 func newControlUser(h conn.Hub, ws *websocket.Conn) *controlUser {
@@ -50,6 +51,15 @@ func (many *controlUser) Send(msg []byte) {
 	many.send <- msg
 }
 
+func (many *controlUser) SendObj(obj interface{}) {
+	msg, err := json.Marshal(obj)
+	if err != nil {
+		many.Send(GetTypedInfo(err.Error()))
+		return
+	}
+	many.Send(msg)
+}
+
 func (many *controlUser) RoomOnes() ([]One, error) {
 	if many.Oauth == nil {
 		return nil, ErrUserNotAuthed
@@ -60,43 +70,44 @@ func (many *controlUser) RoomOnes() ([]One, error) {
 	return many.Account.Ones, nil
 }
 
-func (many *controlUser) SendIpcams() {
-	cameras, err := many.genCameraList()
-	if err != nil {
-		many.Send(GetTypedInfo("Cannot get cameras"))
-		return
-	}
-	many.Send(cameras)
-}
-
-func (many *controlUser) genCameraList() ([]byte, error) {
+func (many *controlUser) SendUserRoomList() {
 	ones, err := many.RoomOnes()
 	if err != nil {
-		return nil, err
+		many.Send(GetTypedInfo("Cannot get rooms"))
+		return
 	}
-	list := conn.CameraList{
-		Type:  "CameraList",
-		Rooms: make([]conn.CameraRoom, 0),
+	many.SendObj(gin.H{"type": "Rooms", "content": ones})
+}
+
+func (many *controlUser) SendOneRoomContent(oneId uint, ipcams []byte) {
+	many.SendObj(gin.H{"type": "Room", "Id": oneId, "content": json.RawMessage(ipcams)})
+}
+
+func (many *controlUser) SendUserRoomsContent() {
+	ones := many.Account.Ones
+	if ones == nil {
+		return
 	}
-	for _, one := range ones {
-		r := conn.CameraRoom{
-			Id:      one.ID,
-			Name:    one.Name,
-			IsOwner: one.OwnerId == many.Account.ID,
-			Cameras: make([]conn.Ipcam, 0),
+	for i := range ones {
+		if room, ok := many.hub.GetRoom(ones[i].ID); ok {
+			many.SendChangeRoomContent(ones[i].ID, room.Ipcams())
 		}
-		if room, ok := many.hub.GetRoom(one.ID); ok {
-			for _, ipcam := range room.Ipcams() {
-				r.Cameras = append(r.Cameras, ipcam)
-			}
-		}
-		list.Rooms = append(list.Rooms, r)
 	}
-	cameraList, err := json.Marshal(list)
-	if err != nil {
-		return nil, err
+}
+
+func (many *controlUser) SendUserRoomsView() {
+	var views []AccountOne
+	if err = many.Oauth.ViewsByViewer(&views); err != nil {
+		many.Send(GetTypedInfo("Cannot get views"))
+	} else {
+		many.SendObj(gin.H{"type": "RoomViews", "content": views})
 	}
-	return cameraList, nil
+}
+
+func (many *controlUser) SendUserIpcams() {
+	many.SendUserRoomList()
+	many.SendUserRoomsContent()
+	many.SendUserRoomsView()
 }
 
 // with ping
@@ -176,14 +187,14 @@ func (many *controlUser) onReadNotAuthed(typ, content []byte) {
 	glog.Errorln("Unknow unauthed:", string(typ), string(content))
 }
 
-func AuthMws(ws conn.Ws, secret interface{}) (*Oauth, error) {
-	token, err := conn.AuthWs(ws, secret)
+func AuthMws(ws conn.Ws, vf conn.VerifyFunc) (*Oauth, error) {
+	_, token, err := ws.ReadMessage()
 	if err != nil {
-		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth token failed"}`))
+		glog.Infoln("Read message err:", err)
 		return nil, err
 	}
 	o := &Oauth{}
-	if err = conn.GetTokenOauth(token, o); err != nil {
+	if err = vf(o, token); err != nil {
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth failed"}`))
 		return nil, err
 	}
@@ -193,7 +204,7 @@ func AuthMws(ws conn.Ws, secret interface{}) (*Oauth, error) {
 	return o, nil
 }
 
-func HandleManyCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
+func HandleManyCtrl(h conn.Hub, vf conn.VerifyFunc) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ws, err := Upgrader.Upgrade(c.Writer, c.Request, nil)
 		if err != nil {
@@ -201,7 +212,7 @@ func HandleManyCtrl(h conn.Hub, secret interface{}) gin.HandlerFunc {
 			return
 		}
 		defer ws.Close()
-		o, err := AuthMws(ws, secret)
+		o, err := AuthMws(ws, vf)
 		if err != nil {
 			glog.Infoln("Auth failed:", err)
 			return
@@ -291,8 +302,8 @@ func (many *controlUser) onManyGetData(name []byte) {
 	switch string(name) {
 	case "Userinfo":
 		many.Send(GetTypedMsgStr(string(name), many.Account.Name))
-	case "CameraList":
-		many.SendIpcams()
+	case "UserCameras":
+		many.SendUserIpcams()
 	default:
 		glog.Errorln("Unknow GetManyData name:", string(name))
 		many.Send(GetTypedInfo("Unknow GetManyData name:" + string(name)))

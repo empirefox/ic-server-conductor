@@ -20,7 +20,7 @@ type Connection interface {
 
 type ControlUser interface {
 	Connection
-	SendIpcams()
+	SendChangeRoomContent(oneId uint, ipcams []byte)
 	RoomOnes() ([]account.One, error)
 	GetOauth() *account.Oauth
 }

@@ -19,14 +19,14 @@ func newFakeIdMany(id uint) *fakeMany {
 
 type fakeMany struct {
 	*controlUser
-	dataSent         []byte
+	dataSent         [][]byte
 	messageType      int
 	dataForRead      []byte
 	dataWrote        []byte
 	closeCalledTimes int
 }
 
-func (c *fakeMany) Send(msg []byte) { c.dataSent = msg }
+func (c *fakeMany) Send(msg []byte) { c.dataSent = append(c.dataSent, msg) }
 func (c *fakeMany) Close() error    { c.closeCalledTimes++; return nil }
 
 func (c *fakeMany) ReadMessage() (messageType int, p []byte, err error) {

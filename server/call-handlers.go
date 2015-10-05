@@ -12,6 +12,7 @@ import (
 	"github.com/empirefox/ic-server-conductor/account"
 )
 
+// Deprecated
 func (s *Server) GetApiProviders(c *gin.Context) {
 	var ops account.OauthProviders
 	if err := ops.All(); err != nil {
@@ -22,6 +23,7 @@ func (s *Server) GetApiProviders(c *gin.Context) {
 	c.JSON(http.StatusOK, ops)
 }
 
+// Deprecated
 func (s *Server) newManyToken(c *gin.Context, ouser interface{}) {
 	u, err := json.Marshal(ouser)
 	if err != nil {
@@ -42,6 +44,7 @@ func (s *Server) newManyToken(c *gin.Context, ouser interface{}) {
 	c.String(http.StatusOK, tokenString)
 }
 
+// Deprecated
 func (s *Server) newOneToken(c *gin.Context, u *account.Oauth) {
 	token := jwt.New(s.Alg)
 	token.Header["kid"] = SK_ONE
@@ -57,6 +60,7 @@ func (s *Server) newOneToken(c *gin.Context, u *account.Oauth) {
 	c.String(http.StatusOK, tokenString)
 }
 
+// Deprecated
 func (s *Server) GetLogin(c *gin.Context) {
 	claims := c.Keys[s.ClaimsKey].(map[string]interface{})
 	ouser := &account.Oauth{}

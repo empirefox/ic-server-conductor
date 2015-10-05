@@ -1,7 +1,6 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -52,22 +51,6 @@ func (s *Server) Auth(kid string) gin.HandlerFunc {
 	}
 }
 
-func (s *Server) CheckManyUser(c *gin.Context) {
-	userBs, ok := c.Keys[s.ClaimsKey].(map[string]interface{})[s.UserKey]
-	if !ok {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	user, ok := userBs.(string)
-	if !ok {
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-	o := &Oauth{}
-	if err := json.Unmarshal([]byte(user), o); err != nil {
-		glog.Infoln("Unmarshal user err:", err)
-		c.AbortWithError(http.StatusUnauthorized, err)
-		return
-	}
-	c.Set(s.UserKey, o)
+func (s *Server) Verify(o *account.Oauth, token []byte) error {
+	return s.goauthConfig.Verify(o, token)
 }

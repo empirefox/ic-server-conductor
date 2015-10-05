@@ -129,20 +129,17 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 	return res
 }
 
-func (s *Server) GetCheckToken() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		claims := c.Keys[s.ClaimsKey].(map[string]interface{})
-		exp := claims["exp"].(int64)
-		update := time.Now().Add(time.Minute * 30).Unix()
-		if exp > update {
-			c.JSON(http.StatusOK, "{}")
-			return
-		}
-		s.newManyToken(c, claims[s.UserKey])
+func (s *Server) PostNewToken(c *gin.Context) {
+	tokenObj, err := s.goauthConfig.NewToken(c.Keys[config.GinUserKey])
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
 	}
+	c.JSON(http.StatusOK, tokenObj)
 }
 
-func (s *Server) PostAssociate(c *gin.Context) {
+// Deprecated
+func (s *Server) PostOauthLogin(c *gin.Context) {
 	o := &account.Oauth{}
 	if err := c.BindJSON(o); err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
@@ -152,15 +149,24 @@ func (s *Server) PostAssociate(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(http.StatusOK, `{"error":0,"content":"Associate ok"}`)
+	c.AbortWithStatus(http.StatusOK)
 }
 
-func (s *Server) DeleteUnAssociate(c *gin.Context) {
-	if err := c.Keys[s.UserKey].(*account.Oauth).UnAssociate(c.Param("provider")); err != nil {
+// Deprecated
+func (s *Server) DeleteOauthUnlink(c *gin.Context) {
+	var obj map[string]interface{}
+	if c.BindJSON(&obj) != nil {
+		return
+	}
+	if prd, ok := obj["provider"].(string); !ok {
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	if err := c.Keys[s.UserKey].(*account.Oauth).UnAssociate(prd); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(http.StatusOK, `{"error":0,"content":"UnAssociate ok"}`)
+	c.AbortWithStatus(http.StatusOK)
 }
 
 func (s *Server) GetAccountProviders(c *gin.Context) {
@@ -171,17 +177,4 @@ func (s *Server) GetAccountProviders(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"current": o.Provider, "providers": ps})
-}
-
-func DeleteManyLogoff(c *gin.Context) {
-	iuser, ok := c.Get(conn.UserKey)
-	if !ok {
-		c.JSON(http.StatusForbidden, `{"error":1,"content":"user not authed"}`)
-		return
-	}
-	if err := iuser.(*account.Oauth).Account.Logoff(); err != nil {
-		c.JSON(http.StatusInternalServerError, `{"error":1,"content":"cannot del user"}`)
-		return
-	}
-	c.JSON(http.StatusOK, `{"error":0,"content":"log off ok"}`)
 }

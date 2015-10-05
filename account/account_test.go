@@ -4,6 +4,7 @@
 package account
 
 import (
+	"flag"
 	"testing"
 
 	_ "github.com/lib/pq"
@@ -13,7 +14,8 @@ import (
 )
 
 func init() {
-	DB.LogMode(true)
+	//	DB.LogMode(true)
+	flag.Set("stderrthreshold", "INFO")
 }
 
 func recoveryAccount() {
@@ -21,34 +23,56 @@ func recoveryAccount() {
 	aservice.CreateTables()
 }
 
-func TestOauth_OnOid(t *testing.T) {
+func TestOauth(t *testing.T) {
 	Convey("Oauth", t, func() {
 		recoveryAccount()
-		Convey("should create new Oauth and Account", func() {
-			var o Oauth
-			err := o.OnOid("L2m", "oauth-oid")
-			So(err, ShouldBeNil)
-			So(o.Account.Name, ShouldEqual, "L2moauth-oid")
+		Convey("should create new Oauth and Account, then Link new Oauth, Unlink", func() {
+			// Create new
+			o := &Oauth{}
+			So(o.OnLogin("L2m", "oauth-oid", "oname", ""), ShouldBeNil)
+			So(o.Account.Name, ShouldEqual, "Unknown")
 			So(len(o.Account.Ones), ShouldEqual, 0)
 
-			var a Account
-			err = DB.First(&a).Error
-			So(err, ShouldBeNil)
-			So(a.Name, ShouldEqual, "L2moauth-oid")
-		})
-		Convey("should find Oauth with full Account", func() {
-			var o Oauth
-			err := o.OnOid("L2m", "oauth-oid2")
-			So(err, ShouldBeNil)
-			So(o.Account.Name, ShouldEqual, "L2moauth-oid2")
-			So(len(o.Account.Ones), ShouldEqual, 0)
+			a := &Account{}
+			So(DB.First(a).Error, ShouldBeNil)
+			So(a.Name, ShouldEqual, "Unknown")
 
-			var o2 Oauth
-			err = o2.OnOid("L2m", "oauth-oid2")
-			So(err, ShouldBeNil)
-			So(o2.ID, ShouldEqual, o.ID)
-			So(o2.Account.Name, ShouldEqual, o.Account.Name)
+			// OnLink
+			o2 := &Oauth{}
+			So(o2.OnLink(o, "gogogo", "goid", "goname", ""), ShouldBeNil)
 			So(DB.NewRecord(o2), ShouldBeFalse)
+			var ps []string
+			So(o.Account.GetProviders(&ps), ShouldBeNil)
+			So(ps, ShouldContain, "L2m")
+			So(ps, ShouldContain, "gogogo")
+
+			// Unlink
+			So(o2.Unlink("L2m"), ShouldBeNil)
+			var ps2 []string
+			So(o.Account.GetProviders(&ps2), ShouldBeNil)
+			So(ps2, ShouldNotContain, "L2m")
+			So(ps2, ShouldContain, "gogogo")
+		})
+		Convey("should find Oauth with full Account#Account.GetOnes", func() {
+			// init
+			o := &Oauth{}
+			So(o.OnLogin("L2m", "oauth-oid2", "oname2", ""), ShouldBeNil)
+			o.Account.Name = "account_name"
+			So(DB.Save(&o.Account).Error, ShouldBeNil)
+
+			// Find exist
+			o2 := &Oauth{}
+			So(o2.OnLogin("L2m", "oauth-oid2", "oname2", ""), ShouldBeNil)
+			So(o2.ID, ShouldEqual, o.ID)
+			So(o2.Account.Name, ShouldEqual, "account_name")
+
+			// Logoff
+			So(o2.Logoff(), ShouldBeNil)
+			var count int
+			So(DB.Model(&Account{}).Count(&count).Error, ShouldBeNil)
+			So(count, ShouldEqual, 0)
+			So(DB.Model(&Oauth{}).Count(&count).Error, ShouldBeNil)
+			So(count, ShouldEqual, 0)
 		})
 	})
 }
@@ -60,15 +84,12 @@ func TestAccount(t *testing.T) {
 			addr := "ssssssssss"
 			a := &Account{}
 			a.Name = "ExistAccount"
-			err := DB.Save(a).Error
-			So(err, ShouldBeNil)
+			So(DB.Save(a).Error, ShouldBeNil)
 
-			err = a.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne1"}})
-			So(err, ShouldBeNil)
+			So(a.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne1"}}), ShouldBeNil)
 
 			var one One
-			err = DB.Where("addr=? and name=?", addr, "NewOne1").Preload("Owner").First(&one).Error
-			So(err, ShouldBeNil)
+			So(DB.Where("addr=? and name=?", addr, "NewOne1").Preload("Owner").First(&one).Error, ShouldBeNil)
 			So(one.Owner.ID, ShouldEqual, a.ID)
 		})
 		Convey("should unreg an One", func() {
@@ -76,43 +97,35 @@ func TestAccount(t *testing.T) {
 			// init owner
 			owner := &Account{}
 			owner.Name = "OwnerAccount"
-			err := DB.Save(owner).Error
-			So(err, ShouldBeNil)
+			So(DB.Save(owner).Error, ShouldBeNil)
 			// init One
-			err = owner.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne2"}})
-			So(err, ShouldBeNil)
+			one0 := &One{Addr: addr, BaseModel: BaseModel{Name: "NewOne2"}}
+			So(owner.RegOne(one0), ShouldBeNil)
 			// init viewer
 			viewer := &Account{}
 			viewer.Name = "ViewerAccount"
-			err = DB.Save(viewer).Error
-			So(err, ShouldBeNil)
+			So(DB.Save(viewer).Error, ShouldBeNil)
 			// viewer view the one
 			one := &One{}
-			err = one.Find([]byte(addr))
-			So(err, ShouldBeNil)
-			err = viewer.ViewOne(one)
-			So(err, ShouldBeNil)
+			So(one.FindIfOwner(one0.ID, one0.OwnerId), ShouldBeNil)
+			So(viewer.ViewOne(one), ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 1)
 			viewer.Ones = []One{}
-			err = DB.Model(viewer).Related(&viewer.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(viewer).Related(&viewer.Ones, "Ones").Error, ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 1)
 			// onwer unreg the one
-			err = owner.RemoveOne(one)
-			So(err, ShouldBeNil)
+			So(owner.RemoveOne(one), ShouldBeNil)
 			// validate One
 			var result One
 			notfound := DB.Where("addr=?", addr).First(&result).RecordNotFound()
 			So(notfound, ShouldBeTrue)
 			// validate viewer
 			viewer.Ones = []One{}
-			err = DB.Model(viewer).Related(&viewer.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(viewer).Related(&viewer.Ones, "Ones").Error, ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 0)
 			// validate owner
 			owner.Ones = []One{}
-			err = DB.Model(owner).Related(&owner.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(owner).Related(&owner.Ones, "Ones").Error, ShouldBeNil)
 			So(len(owner.Ones), ShouldEqual, 0)
 		})
 		Convey("should unview an One", func() {
@@ -120,101 +133,73 @@ func TestAccount(t *testing.T) {
 			// init owner
 			owner := &Account{}
 			owner.Name = "OwnerAccount"
-			err := DB.Save(owner).Error
-			So(err, ShouldBeNil)
+			So(DB.Save(owner).Error, ShouldBeNil)
 			// init One
-			err = owner.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne5"}})
-			So(err, ShouldBeNil)
+			one0 := &One{Addr: addr, BaseModel: BaseModel{Name: "NewOne5"}}
+			So(owner.RegOne(one0), ShouldBeNil)
 			// init viewer
 			viewer := &Account{}
 			viewer.Name = "ViewerAccount"
-			err = DB.Save(viewer).Error
-			So(err, ShouldBeNil)
+			So(DB.Save(viewer).Error, ShouldBeNil)
 			// viewer view the one
 			one := &One{}
-			err = one.Find([]byte(addr))
-			So(err, ShouldBeNil)
-			err = viewer.ViewOne(one)
-			So(err, ShouldBeNil)
+			So(one.Find(one0.ID), ShouldBeNil)
+			So(viewer.ViewOne(one), ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 1)
 			viewer.Ones = []One{}
-			err = DB.Model(viewer).Related(&viewer.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(viewer).Related(&viewer.Ones, "Ones").Error, ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 1)
 			// onwer unreg the one
-			err = viewer.RemoveOne(one)
-			So(err, ShouldBeNil)
+			So(viewer.RemoveOne(one), ShouldBeNil)
 			// validate One
 			var result One
 			notfound := DB.Where("addr=?", addr).First(&result).RecordNotFound()
 			So(notfound, ShouldBeFalse)
 			// validate viewer
 			viewer.Ones = []One{}
-			err = DB.Model(viewer).Related(&viewer.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(viewer).Related(&viewer.Ones, "Ones").Error, ShouldBeNil)
 			So(len(viewer.Ones), ShouldEqual, 0)
 			// validate owner
 			owner.Ones = []One{}
-			err = DB.Model(owner).Related(&owner.Ones, "Ones").Error
-			So(err, ShouldBeNil)
+			So(DB.Model(owner).Related(&owner.Ones, "Ones").Error, ShouldBeNil)
 			So(len(owner.Ones), ShouldEqual, 1)
 		})
 	})
 }
 
-func TestOne_Find(t *testing.T) {
-	Convey("One", t, func() {
-		recoveryAccount()
-		Convey("should find an Oauth", func() {
-			addr := "ssssssssss"
-			a := &Account{}
-			a.Name = "ExistAccount"
-			err := DB.Save(a).Error
-			So(err, ShouldBeNil)
-
-			err = a.RegOne(&One{Addr: addr, BaseModel: BaseModel{Name: "NewOne3"}})
-			So(err, ShouldBeNil)
-
-			var one One
-			err = one.Find([]byte(addr))
-			So(err, ShouldBeNil)
-			So(one.OwnerId, ShouldEqual, a.ID)
-			So(one.Addr, ShouldEqual, addr)
-			So(one.Name, ShouldEqual, "NewOne3")
-			err = one.Viewers()
-			So(err, ShouldBeNil)
-			So(one.Accounts[0].ID, ShouldEqual, a.ID)
-		})
-	})
-}
-
-func TestOauth_CanView(t *testing.T) {
-	Convey("Oauth", t, func() {
+func TestOauth_View(t *testing.T) {
+	Convey("Oauth_View", t, func() {
 		recoveryAccount()
 		Convey("should view special room", func() {
 			// init oauth
 			oauth := &Oauth{}
-			err := oauth.OnOid("p", "id")
-			So(err, ShouldBeNil)
+			So(oauth.OnLogin("p", "id", "pn", ""), ShouldBeNil)
 
 			// reg one then find one will ok
 			one := &One{Addr: "addr"}
-			err = oauth.Account.RegOne(one)
-			So(err, ShouldBeNil)
-			err = one.Find([]byte("addr"))
-			So(err, ShouldBeNil)
+			So(oauth.Account.RegOne(one), ShouldBeNil)
+			var count int
+			DB.Model(&One{}).Count(&count)
+			So(count, ShouldEqual, 1)
 			So(oauth.CanView(one), ShouldBeTrue)
+			var aos []AccountOne
+			So(one.ViewsByShare(&aos), ShouldBeNil)
+			So(len(aos), ShouldEqual, 1)
 
 			// init another oauth, will fail
 			oauth = &Oauth{}
-			err = oauth.OnOid("p", "id2")
-			So(err, ShouldBeNil)
+			So(oauth.OnLogin("p", "id2", "pn2", ""), ShouldBeNil)
 			So(oauth.CanView(one), ShouldBeFalse)
+			var aos2 []AccountOne
+			So(one.ViewsByShare(&aos2), ShouldBeNil)
+			So(len(aos2), ShouldEqual, 1)
 
 			// view the one, will ok
-			err = oauth.Account.ViewOne(one)
-			So(err, ShouldBeNil)
+			So(oauth.Account.ViewOne(one), ShouldBeNil)
 			So(oauth.CanView(one), ShouldBeTrue)
+			var aos3 []AccountOne
+			So(one.ViewsByShare(&aos3), ShouldBeNil)
+			So(len(aos3), ShouldEqual, 2)
 		})
 	})
 }
