@@ -71,7 +71,7 @@ func (many *controlUser) RoomOnes() ([]One, error) {
 }
 
 func (many *controlUser) SendUserRoomList() {
-	ones, err := many.RoomOnes()
+	ones, err := many.RawRooms()
 	if err != nil {
 		many.Send(GetTypedInfo("Cannot get rooms"))
 		return
@@ -79,8 +79,8 @@ func (many *controlUser) SendUserRoomList() {
 	many.SendObj(gin.H{"type": "Rooms", "content": ones})
 }
 
-func (many *controlUser) SendOneRoomContent(oneId uint, ipcams []byte) {
-	many.SendObj(gin.H{"type": "Room", "Id": oneId, "content": json.RawMessage(ipcams)})
+func (many *controlUser) SendChangeRoomContent(oneId uint, ipcams *json.RawMessage) {
+	many.SendObj(gin.H{"type": "Room", "id": oneId, "content": ipcams})
 }
 
 func (many *controlUser) SendUserRoomsContent() {
@@ -96,8 +96,7 @@ func (many *controlUser) SendUserRoomsContent() {
 }
 
 func (many *controlUser) SendUserRoomsView() {
-	var views []AccountOne
-	if err = many.Oauth.ViewsByViewer(&views); err != nil {
+	if views, err := many.Oauth.RawViewsByViewer(); err != nil {
 		many.Send(GetTypedInfo("Cannot get views"))
 	} else {
 		many.SendObj(gin.H{"type": "RoomViews", "content": views})
@@ -195,10 +194,10 @@ func AuthMws(ws conn.Ws, vf conn.VerifyFunc) (*Oauth, error) {
 	}
 	o := &Oauth{}
 	if err = vf(o, token); err != nil {
-		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Info","content":"Auth failed"}`))
+		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"LoginFailed"}`))
 		return nil, err
 	}
-	if err = ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"Login","content":1}`)); err != nil {
+	if err = ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"LoginOk"}`)); err != nil {
 		return nil, err
 	}
 	return o, nil
@@ -265,7 +264,7 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 		}
 		msg := []byte(fmt.Sprintf(`{
 			"type":"Response","to":"ManageSetRoomName",
-			"content":{"id":%d,"name":"%s"}
+			"content":{"ID":%d,"Name":"%s"}
 		}`, one.ID, one.Name))
 		many.Send(msg)
 	case "ManageDelRoom":
@@ -300,8 +299,6 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 
 func (many *controlUser) onManyGetData(name []byte) {
 	switch string(name) {
-	case "Userinfo":
-		many.Send(GetTypedMsgStr(string(name), many.Account.Name))
 	case "UserCameras":
 		many.SendUserIpcams()
 	default:

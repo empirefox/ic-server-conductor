@@ -14,7 +14,7 @@ type getInviteCodeData struct {
 	Room uint `json:"room"`
 }
 
-func HandleManyGetInviteCode(h Hub) gin.HandlerFunc {
+func HandleManyGetInviteCode(h Hub, userKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data getInviteCodeData
 		if err := c.BindJSON(&data); err != nil {
@@ -22,10 +22,11 @@ func HandleManyGetInviteCode(h Hub) gin.HandlerFunc {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
-		user := c.Keys[UserKey].(*Oauth).Account
+		user := c.Keys[userKey].(*Oauth).Account
 		one := &One{}
 		if err := one.FindIfOwner(data.Room, user.ID); err != nil {
 			glog.Infoln("Not the owner of the room:", err)
+			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{
@@ -40,7 +41,7 @@ type onInviteData struct {
 	Code string `json:"code"`
 }
 
-func onManyInvite(h Hub, c *gin.Context) (ok bool) {
+func onManyInvite(h Hub, c *gin.Context, userKey string) (ok bool) {
 	var data onInviteData
 	if err := c.BindJSON(&data); err != nil {
 		glog.Infoln("Get on-invite data:", err)
@@ -52,11 +53,11 @@ func onManyInvite(h Hub, c *gin.Context) (ok bool) {
 		return
 	}
 	one := &One{}
-	if err := one.FindIfOwner(data.Room, 0); err != nil {
+	if err := one.Find(data.Room); err != nil {
 		glog.Infoln("Room not found:", err)
 		return
 	}
-	user := c.Keys[UserKey].(*Oauth).Account
+	user := c.Keys[userKey].(*Oauth).Account
 	if one.OwnerId == user.ID {
 		glog.Infoln("Cannot invite to your own room")
 		return
@@ -68,9 +69,9 @@ func onManyInvite(h Hub, c *gin.Context) (ok bool) {
 	return true
 }
 
-func HandleManyOnInvite(h Hub) gin.HandlerFunc {
+func HandleManyOnInvite(h Hub, userKey string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !onManyInvite(h, c) {
+		if !onManyInvite(h, c, userKey) {
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}

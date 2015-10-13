@@ -2,7 +2,6 @@ package account
 
 import (
 	"encoding/json"
-	"strings"
 
 	"golang.org/x/oauth2"
 
@@ -11,19 +10,17 @@ import (
 )
 
 type OauthProvider struct {
-	BaseModel
-	Path         string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"path,omitempty"`
-	ClientID     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"client_id,omitempty"`
-	ClientSecret string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	AuthURL      string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"auth_url,omitempty"`
-	TokenURL     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	RedirectURL  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"redirect_url,omitempty"`
-	Scope        string `json:",omitempty"                    sql:"type:varchar(255);default:''" satellizer:"scope,omitempty"`
-	UserEndpoint string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	JsonPathOid  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	JsonPathName string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	JsonPathPic  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"`
-	Disabled     bool   `json:",omitempty"                    sql:"default:false"`
+	ID           uint   `gorm:"primary_key"                                                      satellizer:"-"`
+	Name         string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:",omitempty"`
+	ClientID     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:",omitempty"`
+	ClientSecret string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	TokenURL     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	RedirectURL  string `json:",omitempty"                    sql:"type:varchar(255);not null"   satellizer:",omitempty"`
+	UserEndpoint string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	JsonPathOid  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	JsonPathName string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	JsonPathPic  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
+	Disabled     bool   `json:",omitempty"                    sql:"default:false"                satellizer:",omitempty"`
 }
 
 type SatellizerProvider map[string]interface{}
@@ -44,9 +41,7 @@ func (o *OauthProvider) ToGoauth() goauth.Provider {
 			ClientID:     o.ClientID,
 			ClientSecret: o.ClientSecret,
 			RedirectURL:  o.RedirectURL,
-			Scopes:       strings.Split(o.Scope, ","),
 			Endpoint: oauth2.Endpoint{
-				AuthURL:  o.AuthURL,
 				TokenURL: o.TokenURL,
 			},
 		},
@@ -68,32 +63,35 @@ func SatellizerProviders() ([]byte, error) {
 }
 
 // Can be use by goauth
-func GoauthProviders() (map[string]goauth.Provider, error) {
+func GoauthProviders(grp string) (map[string]goauth.Provider, error) {
 	var ops OauthProviders
 	if err := ops.All(); err != nil {
 		return nil, err
 	}
-	return ops.ToGoauth(), nil
+	return ops.ToGoauth(grp), nil
 }
 
 type OauthProviders []OauthProvider
 
-func (ops OauthProviders) All() error {
-	return aservice.FindOauthProviders(&ops)
+func (ops *OauthProviders) All() error {
+	return aservice.FindOauthProviders(ops)
 }
 
 func (ops OauthProviders) ToSatellizer() []SatellizerProvider {
-	ps := make([]SatellizerProvider, len(ops))
+	ps := make([]SatellizerProvider, 0)
 	for _, v := range ops {
 		ps = append(ps, v.ToSatellizer())
 	}
 	return ps
 }
 
-func (ops OauthProviders) ToGoauth() map[string]goauth.Provider {
-	ps := make(map[string]goauth.Provider, len(ops))
+func (ops OauthProviders) ToGoauth(grp string) map[string]goauth.Provider {
+	prefix := grp + "/"
+	ps := make(map[string]goauth.Provider, 0)
 	for _, op := range ops {
-		ps[op.Path] = op.ToGoauth()
+		if !op.Disabled {
+			ps[prefix+op.Name] = op.ToGoauth()
+		}
 	}
 	return ps
 }

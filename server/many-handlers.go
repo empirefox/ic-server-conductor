@@ -19,6 +19,14 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+func (s *Server) GetOauths(c *gin.Context) {
+	if data, err := account.SatellizerProviders(); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+	} else {
+		c.Data(http.StatusOK, "application/json; charset=utf-8", data)
+	}
+}
+
 func (s *Server) GetSystemData(c *gin.Context) {
 	e := `sys-data`
 	c.Header("Etag", e)
@@ -51,7 +59,7 @@ func (s *Server) WsManySignaling(c *gin.Context) {
 		return
 	}
 	defer ws.Close()
-	o, err := many.AuthMws(ws, s.Keys[SK_MANY])
+	o, err := many.AuthMws(ws, s.Verify)
 	if err != nil {
 		return
 	}
@@ -103,16 +111,6 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 		glog.Infoln("Not permited to view this room")
 		return nil
 	}
-	cameras := room.Ipcams()
-	if cameras == nil {
-		glog.Infoln("Cameras not found in room")
-		return nil
-	}
-	_, ok = cameras[info.Camera]
-	if !ok {
-		glog.Infoln("Camera not found in room")
-		return nil
-	}
 	res, err := h.WaitForProcess(info.Reciever)
 	if err != nil {
 		glog.Infoln("Wait for process:", err)
@@ -130,43 +128,12 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 }
 
 func (s *Server) PostNewToken(c *gin.Context) {
-	tokenObj, err := s.goauthConfig.NewToken(c.Keys[config.GinUserKey])
+	tokenObj, err := s.goauthConfig.NewToken(c.Keys[s.UserKey].(*account.Oauth))
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
 	c.JSON(http.StatusOK, tokenObj)
-}
-
-// Deprecated
-func (s *Server) PostOauthLogin(c *gin.Context) {
-	o := &account.Oauth{}
-	if err := c.BindJSON(o); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
-		return
-	}
-	if err := c.Keys[s.UserKey].(*account.Oauth).Associate(o); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	c.AbortWithStatus(http.StatusOK)
-}
-
-// Deprecated
-func (s *Server) DeleteOauthUnlink(c *gin.Context) {
-	var obj map[string]interface{}
-	if c.BindJSON(&obj) != nil {
-		return
-	}
-	if prd, ok := obj["provider"].(string); !ok {
-		c.AbortWithStatus(http.StatusBadRequest)
-		return
-	}
-	if err := c.Keys[s.UserKey].(*account.Oauth).UnAssociate(prd); err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	c.AbortWithStatus(http.StatusOK)
 }
 
 func (s *Server) GetAccountProviders(c *gin.Context) {

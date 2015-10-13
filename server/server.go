@@ -2,11 +2,10 @@ package server
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
-	"github.com/itsjamie/gin-cors"
+	"github.com/golang/glog"
 
 	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
@@ -16,7 +15,6 @@ import (
 	"github.com/empirefox/ic-server-conductor/conn/many"
 	"github.com/empirefox/ic-server-conductor/conn/one"
 	"github.com/empirefox/ic-server-conductor/invite"
-	"github.com/empirefox/ic-server-conductor/utils"
 )
 
 const (
@@ -29,29 +27,23 @@ type Server struct {
 	OneAlg          string
 	Keys            map[string][]byte
 	Hub             conn.Hub
-	OauthJson       []byte
 	IsDevMode       bool
 	OnEngineCreated func(*gin.Engine)
+	OauthGroupName  string
 	goauthConfig    *goauth.Config
 }
 
-func (s *Server) Ok(c *gin.Context)       { c.AbortWithStatus(http.StatusOK) }
+func (s *Server) Ok(c *gin.Context) {
+	glog.Infoln(c.Request.URL.Path)
+	c.AbortWithStatus(http.StatusOK)
+}
 func (s *Server) NotFound(c *gin.Context) { c.AbortWithStatus(http.StatusNotFound) }
 
 func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
-	conn.UserKey = s.UserKey
-	corsMiddleWare := cors.Middleware(cors.Config{
-		Origins:         utils.GetEnv("ORIGINS", "*"),
-		Methods:         "GET, PUT, POST, DELETE",
-		RequestHeaders:  "Origin, Authorization, Content-Type",
-		ExposedHeaders:  "",
-		MaxAge:          48 * time.Hour,
-		Credentials:     false,
-		ValidateHeaders: false,
-	})
+	corsMiddleWare := s.Cors("GET, PUT, POST, DELETE")
 
-	providers, _ := account.GoauthProviders()
+	providers, _ := account.GoauthProviders(s.OauthGroupName)
 	s.goauthConfig = &goauth.Config{
 		Providers:   providers,
 		NewUserFunc: func() goauth.OauthUser { return &account.Oauth{} },
@@ -76,7 +68,7 @@ func (s *Server) Run() error {
 
 	// peer from MANY client
 	router.GET("/sys-data.js", s.GetSystemData)
-	router.GET("/oauth/oauths", corsMiddleWare, func(c *gin.Context) { c.Writer.Write(s.OauthJson) })
+	router.GET("/oauth/oauths", corsMiddleWare, s.GetOauths)
 	router.OPTIONS("/oauth/oauths", corsMiddleWare, s.Ok)
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
@@ -105,15 +97,15 @@ func (s *Server) Run() error {
 	rm.OPTIONS("/myproviders", s.Ok)
 	rm.GET("/myproviders", s.GetAccountProviders)
 	rm.OPTIONS("/invite-code", s.Ok)
-	rm.POST("/invite-code", invite.HandleManyGetInviteCode(s.Hub))
+	rm.POST("/invite-code", invite.HandleManyGetInviteCode(s.Hub, s.UserKey))
 	rm.OPTIONS("/invite-join", s.Ok)
-	rm.POST("/invite-join", invite.HandleManyOnInvite(s.Hub))
+	rm.POST("/invite-join", invite.HandleManyOnInvite(s.Hub, s.UserKey))
 
 	// many and one login rest api
 	// compatible with Satellizer
 	for path := range providers {
 		router.POST(path, corsMiddleWare, authMiddleWare, s.Ok)
-		router.OPTIONS(path, s.Ok)
+		router.OPTIONS(path, corsMiddleWare, s.Ok)
 	}
 
 	return router.Run(paas.GetBindAddr())

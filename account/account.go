@@ -1,10 +1,19 @@
 package account
 
 import (
+	"encoding/json"
 	"errors"
 	"time"
 
 	"github.com/empirefox/tagsjson/tagjson"
+	"github.com/golang/glog"
+)
+
+const (
+	UserInfo = iota
+	UserRooms
+	ViewByViewer
+	ViewByShare
 )
 
 var (
@@ -15,26 +24,22 @@ var (
 	ErrMultiLink     = errors.New("Oauth cannot link to multi account")
 )
 
-type BaseModel struct {
-	tagjson.Tag
-	ID        uint      `gorm:"primary_key" info:",omitempty"`
-	CreatedAt time.Time `json:"-"`
-	UpdatedAt time.Time `json:"-"`
-	Name      string    `json:",omitempty"  info:",omitempty" sql:"type:varchar(128);not null"`
-}
-
 /////////////////////////////////////////
 //                Oauth
 /////////////////////////////////////////
 
+// tagjson: {"UserInfo":"e"}
 type Oauth struct {
-	BaseModel
-	Account   Account `json:"-"`
-	AccountId uint    `json:"-"`
-	Oid       string  `json:",omitempty"                   sql:"type:varchar(128);not null"`
-	Provider  string  `json:",omitempty"                   sql:"type:varchar(32);not null"`
-	Picture   string  `json:",omitempty" info:",omitempty" sql:"type:varchar(128)"`
-	Enabled   bool    `json:",omitempty"                   sql:"default:true"`
+	ID        uint      `gorm:"primary_key"               UserInfo:""`
+	CreatedAt time.Time `                                 UserInfo:"-"`
+	UpdatedAt time.Time `                                 UserInfo:"-"`
+	Name      string    `sql:"type:varchar(128);not null" UserInfo:""`
+	Account   Account   `                                 UserInfo:""`
+	AccountId uint      `                                 UserInfo:""`
+	Oid       string    `sql:"type:varchar(128);not null" UserInfo:"-"`
+	Provider  string    `sql:"type:varchar(32);not null"  UserInfo:"-"`
+	Picture   string    `sql:"type:varchar(128)"          UserInfo:""`
+	Enabled   bool      `sql:"default:true"               UserInfo:"-"`
 }
 
 // Find Oauth, preload Account and Account.Ones
@@ -70,26 +75,49 @@ func (o *Oauth) Unlink(prd string) error {
 	}
 	return aservice.UnlinkOauth(o.AccountId, prd)
 }
-func (o *Oauth) GetOid() (provider, oid string)        { return o.Provider, o.Oid }
-func (o *Oauth) Logoff() error                         { return o.Account.Logoff() }
-func (o *Oauth) Find(provider, oid string) error       { return aservice.FindOauth(o, provider, oid) }
-func (o *Oauth) Info() interface{}                     { return aservice.Info(o) }
-func (o *Oauth) Valid() bool                           { return aservice.Valid(o) }
-func (o *Oauth) GetOnes() error                        { return o.Account.GetOnes() }
-func (o *Oauth) CanView(one *One) bool                 { return aservice.CanView(o, one) }
-func (o *Oauth) GetProviders(ps *[]string) error       { return o.Account.GetProviders(ps) }
-func (o *Oauth) ViewsByViewer(aos *[]AccountOne) error { return o.Account.ViewsByViewer(aos) }
+func (o *Oauth) Info() interface{} {
+	info, err := tagjson.MarshalR(o, UserInfo)
+	if err != nil {
+		glog.Errorln(err)
+		return "error"
+	}
+	return info
+}
+func (o *Oauth) RawRooms() (*json.RawMessage, error) {
+	if err := o.GetOnes(); err != nil {
+		return nil, err
+	}
+	return tagjson.MarshalR(o.Account.Ones, UserRooms)
+}
+func (o *Oauth) RawViewsByViewer() (*json.RawMessage, error) {
+	var aos AccountOnes
+	if err := o.Account.ViewsByViewer(&aos); err != nil {
+		return nil, err
+	}
+	return tagjson.MarshalR(aos, ViewByViewer)
+}
+func (o *Oauth) GetOid() (provider, oid string)  { return o.Provider, o.Oid }
+func (o *Oauth) Logoff() error                   { return o.Account.Logoff() }
+func (o *Oauth) Find(provider, oid string) error { return aservice.FindOauth(o, provider, oid) }
+func (o *Oauth) Valid() bool                     { return aservice.Valid(o) }
+func (o *Oauth) GetOnes() error                  { return o.Account.GetOnes() }
+func (o *Oauth) CanView(one *One) bool           { return aservice.CanView(o, one) }
+func (o *Oauth) GetProviders(ps *[]string) error { return o.Account.GetProviders(ps) }
 
 /////////////////////////////////////////
 //                Account
 /////////////////////////////////////////
 
+// tagjson: {"UserInfo":"e"}
 type Account struct {
-	BaseModel
-	Desc    string  `json:",omitempty" sql:"type:varchar(128);default:''" info:",omitempty" `
-	Oauths  []Oauth `json:"-"`
-	Ones    []One   `json:"-"          gorm:"many2many:account_ones;"`
-	Enabled bool    `json:",omitempty" sql:"default:true"`
+	ID        uint      `gorm:"primary_key"                 UserInfo:""`
+	CreatedAt time.Time `                                   UserInfo:"-"`
+	UpdatedAt time.Time `                                   UserInfo:"-"`
+	Name      string    `sql:"type:varchar(128);not null"   UserInfo:""`
+	Desc      string    `sql:"type:varchar(128);default:''" UserInfo:""`
+	Oauths    []Oauth   `                                   UserInfo:"-"`
+	Ones      Ones      `gorm:"many2many:account_ones;"     UserInfo:"-"`
+	Enabled   bool      `sql:"default:true"                 UserInfo:"-"`
 }
 
 func (a *Account) GetOnes() error { return aservice.GetOnes(a) }
@@ -112,44 +140,55 @@ func (a *Account) GetProviders(ps *[]string) error { return aservice.AccountProv
 
 func (a *Account) Logoff() error { return aservice.Logoff(a) }
 
-func (a *Account) ViewsByViewer(aos *[]AccountOne) error { return aservice.ViewsByViewer(a, aos) }
+func (a *Account) ViewsByViewer(aos *AccountOnes) error { return aservice.ViewsByViewer(a, aos) }
 
 /////////////////////////////////////////
 //                One
 /////////////////////////////////////////
 
-// tagjson: {"upd":"dv"}
+// tagjson: {"UserRooms":"e"}
 type One struct {
-	tagjson.Tag
-	ID        uint      `gorm:"primary_key"                 upd:",-o,+i"`
-	CreatedAt time.Time `                                   upd:"-"`
-	UpdatedAt time.Time `                                   upd:"-"`
-	Name      string    `sql:"type:varchar(32);not null"    upd:",-o,+i;lmax(32)"`
-	Desc      string    `sql:"type:varchar(128);default:''" upd:",-o;lmax(128)"`
-	Addr      string    `sql:"not null;type:varchar(128)"   upd:"-"`
-	Enabled   bool      `sql:"default:true"                 upd:",-o"`
-	Owner     Account   `                                   upd:"-"`
-	OwnerId   uint      `                                   upd:"-"`
-	Accounts  []Account `gorm:"many2many:account_ones;"     upd:"-"`
-	Ver       string    `sql:"-"                            upd:"-"`
+	ID        uint      `gorm:"primary_key"                 upd:",-o,+i"          UserRooms:""`
+	CreatedAt time.Time `                                   upd:"-"               UserRooms:""`
+	UpdatedAt time.Time `                                   upd:"-"               UserRooms:""`
+	Name      string    `sql:"type:varchar(32);not null"    upd:",-o,+i;lmax(32)" UserRooms:""`
+	Desc      string    `sql:"type:varchar(128);default:''" upd:",-o;lmax(128)"   UserRooms:""`
+	Addr      string    `sql:"not null;type:varchar(128)"   upd:"-"               UserRooms:"-"`
+	Enabled   bool      `sql:"default:true"                 upd:",-o"             UserRooms:""`
+	Owner     Account   `                                   upd:"-"               UserRooms:"-"`
+	OwnerId   uint      `                                   upd:"-"               UserRooms:""`
+	Accounts  []Account `gorm:"many2many:account_ones;"     upd:"-"               UserRooms:"-"`
+	Ver       string    `sql:"-"                            upd:"-"               UserRooms:""`
 }
 
-func (o *One) Find(id uint) error                   { return aservice.FindOne(o, id) }
-func (o *One) FindIfOwner(id, ownerId uint) error   { return aservice.FindOneIfOwner(o, id, ownerId) }
-func (o *One) Save() error                          { return aservice.Save(o) }
-func (o *One) Viewers() error                       { return aservice.Viewers(o) }
-func (o *One) Delete() error                        { return aservice.Delete(o) }
-func (o *One) ViewsByShare(aos *[]AccountOne) error { return aservice.ViewsByShare(o, aos) }
+// tagjson: include
+type Ones []One
+
+func (o *One) Find(id uint) error                 { return aservice.FindOne(o, id) }
+func (o *One) FindIfOwner(id, ownerId uint) error { return aservice.FindOneIfOwner(o, id, ownerId) }
+func (o *One) Save() error                        { return aservice.Save(o) }
+func (o *One) Viewers() error                     { return aservice.Viewers(o) }
+func (o *One) Delete() error                      { return aservice.Delete(o) }
+func (o *One) RawViewsByShare() (*json.RawMessage, error) {
+	var aos AccountOnes
+	if err := aservice.ViewsByShare(o, &aos); err != nil {
+		return nil, err
+	}
+	return tagjson.MarshalR(aos, ViewByShare)
+}
 
 /////////////////////////////////////////
 //              AccountOne
 /////////////////////////////////////////
 
-// Used for adding cascade
+// tagjson: {"ViewByViewer":"e","ViewByShare":"e"}
 type AccountOne struct {
-	AccountId    uint      `json:",omitempty" share:",omitempty"  gorm:"primary_key"`
-	OneId        uint      `json:",omitempty" viewer:",omitempty" gorm:"primary_key"`
-	ViewByShare  string    `json:",omitempty" share:",omitempty"  sql:"type:varchar(128)"`
-	ViewByViewer string    `json:",omitempty" viewer:",omitempty" sql:"type:varchar(128)"`
-	CreatedAt    time.Time `json:",omitempty"`
+	AccountId    uint      `gorm:"primary_key"      ViewByViewer:"-" ViewByShare:""`
+	OneId        uint      `gorm:"primary_key"      ViewByViewer:""  ViewByShare:"-"`
+	ViewByShare  string    `sql:"type:varchar(128)" ViewByViewer:"-" ViewByShare:""`
+	ViewByViewer string    `sql:"type:varchar(128)" ViewByViewer:""  ViewByShare:"-"`
+	CreatedAt    time.Time `                        ViewByViewer:""  ViewByShare:""`
 }
+
+// tagjson: include
+type AccountOnes []AccountOne

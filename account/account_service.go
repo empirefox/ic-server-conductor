@@ -4,13 +4,12 @@ import (
 	"errors"
 
 	. "github.com/empirefox/ic-server-conductor/gorm"
-	"github.com/fatih/structs"
 )
 
 var (
 	aservice            = NewAccountService()
-	AccountNotAuthedErr = errors.New("Account is not authed")
-	ErrParamsRequired   = errors.New("Query param required")
+	AccountNotAuthedErr = errors.New("As Account is not authed")
+	ErrParamsRequired   = errors.New("As Query param required")
 )
 
 func SetService(a AccountService) {
@@ -41,7 +40,6 @@ type AccountService interface {
 	SaveOauth(o *Oauth) error
 	UnlinkOauth(accountId uint, prd string) error
 	FindOauth(o *Oauth, provider, oid string) error
-	Info(o *Oauth) interface{}
 	Valid(o *Oauth) bool
 	CanView(o *Oauth, one *One) bool
 
@@ -51,14 +49,14 @@ type AccountService interface {
 	RemoveOne(a *Account, o *One) error
 	AccountProviders(a *Account, ps *[]string) error
 	Logoff(a *Account) error
-	ViewsByViewer(a *Account, aos *[]AccountOne) error
+	ViewsByViewer(a *Account, aos *AccountOnes) error
 
 	FindOne(o *One, id uint) error
 	FindOneIfOwner(o *One, id, ownerId uint) error
 	Save(o *One) error
 	Viewers(o *One) error
 	Delete(o *One) error
-	ViewsByShare(o *One, aos *[]AccountOne) error
+	ViewsByShare(o *One, aos *AccountOnes) error
 }
 
 func NewAccountService() AccountService {
@@ -108,47 +106,38 @@ func (accountService) GetOnes(a *Account) error {
 	return err
 }
 
-func (accountService) ViewsByViewer(a *Account, aos *[]AccountOne) error {
+func (accountService) ViewsByViewer(a *Account, aos *AccountOnes) error {
 	return DB.Where(AccountOne{AccountId: a.ID}).Select([]string{"one_id", "view_by_viewer"}).Find(aos).Error
 }
 
 // one must be non-exist record
 // a   must be from Oauth.OnLogin
-func (accountService) RegOne(a *Account, one *One) error {
-	one.Owner = *a
-	return a.ViewOne(one)
+func (as accountService) RegOne(a *Account, one *One) error {
+	one.OwnerId = a.ID
+	return as.ViewOne(a, one)
 }
 
 // one must be exist record
 // a   must be from Oauth.OnLogin
 func (accountService) ViewOne(a *Account, one *One) error {
-	if err := DB.Model(a).Association("Ones").Append(one).Error; err != nil {
+	tx := DB.Debug().Begin()
+	if err := tx.Save(one).Error; err != nil {
+		tx.Rollback()
 		return err
 	}
-	return DB.Save(&AccountOne{AccountId: a.ID, ViewByShare: a.Name, OneId: one.ID, ViewByViewer: one.Name}).Error
-}
-
-func indexOf(a *Account, one *One) int {
-	for i := range a.Ones {
-		if a.Ones[i].ID == one.ID {
-			return i
-		}
+	ao := &AccountOne{AccountId: a.ID, ViewByShare: a.Name, OneId: one.ID, ViewByViewer: one.Name}
+	if err := tx.Create(ao).Error; err != nil {
+		tx.Rollback()
+		return err
 	}
-	return -1
+	return tx.Commit().Error
 }
 
 // one must be exist record
 // a   must be from Oauth.OnLogin
 func (accountService) RemoveOne(a *Account, one *One) error {
 	if one.OwnerId == a.ID {
-		err := DB.Delete(one).Error
-		if err != nil {
-			return err
-		}
-		if i := indexOf(a, one); i != -1 {
-			a.Ones = append(a.Ones[:i], a.Ones[i+1:]...)
-		}
-		return nil
+		return DB.Delete(one).Error
 	}
 	return DB.Model(a).Association("Ones").Delete(one).Error
 }
@@ -160,10 +149,7 @@ func (accountService) FindOne(o *One, id uint) error {
 }
 
 func (accountService) FindOneIfOwner(o *One, id, ownerId uint) error {
-	var w One
-	w.ID = id
-	w.OwnerId = ownerId
-	return DB.Where(w).First(o).Error
+	return DB.Where("id = ? and owner_id = ?", id, ownerId).Preload("Owner").First(o).Error
 }
 
 func (accountService) Save(o *One) error {
@@ -181,7 +167,7 @@ func (accountService) Delete(o *One) error {
 	return DB.Delete(o).Error
 }
 
-func (accountService) ViewsByShare(o *One, aos *[]AccountOne) error {
+func (accountService) ViewsByShare(o *One, aos *AccountOnes) error {
 	return DB.Where(AccountOne{OneId: o.ID}).Select([]string{"account_id", "view_by_share"}).Find(aos).Error
 }
 
@@ -192,7 +178,7 @@ func (accountService) OnLogin(o *Oauth, provider, oid, name, pic string) error {
 	w := Oauth{Provider: provider, Oid: oid, Picture: pic, Enabled: true}
 	w.Name = name
 	attr := Oauth{}
-	attr.Account.Name = "Unknown"
+	attr.Account.Name = name
 	attr.Account.Enabled = true
 	return DB.Where(&w).Attrs(&attr).Preload("Account").FirstOrCreate(o).Error
 }
@@ -214,18 +200,6 @@ func (accountService) FindOauth(o *Oauth, provider, oid string) error {
 	}
 	return DB.Where(&Oauth{Provider: provider, Oid: oid, Enabled: true}).
 		Preload("Account").First(o).Error
-}
-
-func (accountService) Info(o *Oauth) interface{} {
-	oss := structs.New(o)
-	oss.TagName = "info"
-	oinfo := oss.Map()
-
-	ss := structs.New(&o.Account)
-	ss.TagName = "info"
-	info := ss.Map()
-	info["oauth"] = oinfo
-	return info
 }
 
 func (accountService) Valid(o *Oauth) bool { return o.Enabled && o.Account.Enabled }

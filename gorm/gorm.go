@@ -25,7 +25,7 @@ func init() {
 
 	paasGorm := paas.GetGorm()
 	if paasGorm.Url == "" {
-		panic("Now in test mode, but 'DB_URL' must be set")
+		panic("'DB_URL' must be set, or set TEST_NO_DB=true for test.")
 	}
 
 	var err error

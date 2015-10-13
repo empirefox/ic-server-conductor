@@ -13,17 +13,15 @@ import (
 func (s *Server) PostSaveOauth(c *gin.Context) {
 	var op account.OauthProvider
 	if err := c.Bind(&op); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": 1, "content": err})
+		c.AbortWithError(http.StatusBadRequest, err)
 		return
 	}
 
 	if err := op.Save(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": 1, "content": "Cannot save"})
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
-	s.OauthJson = account.PageOauthsBytes()
-	c.JSON(http.StatusOK, gin.H{"error": 0, "content": "No need restart now!"})
+	c.AbortWithStatus(http.StatusOK)
 }
 
 func (s *Server) PostClearTables(c *gin.Context) {
@@ -36,5 +34,5 @@ func (s *Server) PostClearTables(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(http.StatusOK, "")
+	c.AbortWithStatus(http.StatusOK)
 }

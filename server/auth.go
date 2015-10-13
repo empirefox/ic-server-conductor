@@ -4,12 +4,15 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
-	. "github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/ic-server-conductor/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
+	"github.com/itsjamie/gin-cors"
 )
 
 var ErrWrongKid = errors.New("Wrong kid")
@@ -20,6 +23,18 @@ func CheckIsSystemMode(c *gin.Context) {
 	}
 	c.JSON(http.StatusNotFound, gin.H{"error": 1, "content": "system running mode changed"})
 	c.Abort()
+}
+
+func (s *Server) Cors(method string) gin.HandlerFunc {
+	return cors.Middleware(cors.Config{
+		Origins:         utils.GetEnv("ORIGINS", "*"),
+		Methods:         method,
+		RequestHeaders:  "Origin, Authorization, Content-Type",
+		ExposedHeaders:  "",
+		MaxAge:          48 * time.Hour,
+		Credentials:     false,
+		ValidateHeaders: false,
+	})
 }
 
 func (s *Server) SecureWs(c *gin.Context) {

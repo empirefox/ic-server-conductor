@@ -3,33 +3,16 @@ package conn
 import (
 	"bytes"
 	"encoding/json"
-
-	"github.com/empirefox/ic-server-conductor/account"
 )
 
 // copy from client one
 type Ipcam struct {
-	Id     string `json:"id,omitempty"`
-	Off    bool   `json:"off,omitempty"`
-	Online bool   `json:"online,omitempty"`
+	Id     string `json:",omitempty"`
+	Off    bool   `json:",omitempty"`
+	Online bool   `json:",omitempty"`
 }
 
 type Ipcams map[string]Ipcam
-
-// Deprecated
-// to many
-type CameraRoom struct {
-	Id      uint   `json:"id,omitempty"`
-	Name    string `json:"name,omitempty"`
-	IsOwner bool   `json:"isOwner,omitempty"`
-	Cameras Ipcams `json:"cameras,omitempty"`
-}
-
-type CameraList struct {
-	Type  string               `json:"type,omitempty"`
-	Rooms []CameraRoom         `json:"content,omitempty"`
-	Views []account.AccountOne `json:"content,omitempty"`
-}
 
 type ServerCommand struct {
 	Name    string `json:"name"`

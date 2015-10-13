@@ -1,6 +1,8 @@
 package conn
 
 import (
+	"encoding/json"
+
 	"github.com/empirefox/ic-server-conductor/account"
 	"github.com/gorilla/websocket"
 )
@@ -20,7 +22,7 @@ type Connection interface {
 
 type ControlUser interface {
 	Connection
-	SendChangeRoomContent(oneId uint, ipcams []byte)
+	SendChangeRoomContent(oneId uint, ipcams *json.RawMessage)
 	RoomOnes() ([]account.One, error)
 	GetOauth() *account.Oauth
 }
@@ -28,7 +30,7 @@ type ControlUser interface {
 type ControlRoom interface {
 	Connection
 	Broadcast(msg []byte)
-	Ipcams() Ipcams
+	Ipcams() *json.RawMessage
 	Friends() ([]account.Account, error)
 	AddOnline(id uint, cu ControlUser)
 	GetOnline(id uint) (ControlUser, bool)
