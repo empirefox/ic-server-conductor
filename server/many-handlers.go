@@ -12,7 +12,6 @@ import (
 	gws "github.com/empirefox/gotool/ws"
 	"github.com/empirefox/ic-server-conductor/account"
 	"github.com/empirefox/ic-server-conductor/conn"
-	"github.com/empirefox/ic-server-conductor/conn/many"
 	"github.com/empirefox/ic-server-conductor/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
@@ -46,8 +45,8 @@ func (s *Server) GetSystemData(c *gin.Context) {
 
 type StartSignalingInfo struct {
 	Room     uint   `json:"room"`
-	Camera   string `json:"camera"`
 	Reciever string `json:"reciever"`
+	Token    string `json:"token"`
 }
 
 // many signaling
@@ -59,11 +58,6 @@ func (s *Server) WsManySignaling(c *gin.Context) {
 		return
 	}
 	defer ws.Close()
-	o, err := many.AuthMws(ws, s.Verify)
-	if err != nil {
-		return
-	}
-
 	_, startInfo, err := ws.ReadMessage()
 	if err != nil {
 		glog.Infoln("Read start info err:", err)
@@ -71,8 +65,14 @@ func (s *Server) WsManySignaling(c *gin.Context) {
 	}
 
 	var info StartSignalingInfo
-	if err := json.Unmarshal(startInfo, &info); err != nil {
+	if err = json.Unmarshal(startInfo, &info); err != nil {
 		glog.Infoln("Unmarshal info err:", err)
+		return
+	}
+
+	o := &account.Oauth{}
+	if err = s.Verify(o, []byte(info.Token)); err != nil {
+		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"AuthFailed"}`))
 		return
 	}
 
@@ -119,10 +119,8 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 	cmd := fmt.Sprintf(`{
 		"name":"CreateSignalingConnection",
 		"from":%d,
-		"content":{
-			"camera":"%s", "reciever":"%s"
-		}
-	}`, info.Room, info.Camera, info.Reciever)
+		"content":"%s"
+	}`, o.AccountId, info.Reciever)
 	room.Send([]byte(cmd))
 	return res
 }

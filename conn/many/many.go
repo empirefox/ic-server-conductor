@@ -40,7 +40,7 @@ func (many *controlUser) Id() uint {
 	if many.Oauth == nil {
 		return 0
 	}
-	return many.Account.ID
+	return many.AccountId
 }
 
 func (many *controlUser) GetOauth() *Oauth {
