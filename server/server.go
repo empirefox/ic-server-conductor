@@ -5,7 +5,6 @@ import (
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
-	"github.com/golang/glog"
 
 	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
@@ -33,10 +32,7 @@ type Server struct {
 	goauthConfig    *goauth.Config
 }
 
-func (s *Server) Ok(c *gin.Context) {
-	glog.Infoln(c.Request.URL.Path)
-	c.AbortWithStatus(http.StatusOK)
-}
+func (s *Server) Ok(c *gin.Context)       { c.AbortWithStatus(http.StatusOK) }
 func (s *Server) NotFound(c *gin.Context) { c.AbortWithStatus(http.StatusNotFound) }
 
 func (s *Server) Run() error {

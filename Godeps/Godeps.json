@@ -1,98 +1,120 @@
 {
-	"ImportPath": "github.com/empirefox/ic-server-ws-signal",
-	"GoVersion": "go1.4.2",
+	"ImportPath": "github.com/empirefox/ic-server-conductor",
+	"GoVersion": "go1.5.1",
 	"Packages": [
 		"./..."
 	],
 	"Deps": [
 		{
 			"ImportPath": "github.com/bitly/go-simplejson",
-			"Comment": "v0.4.3-30-g18db6e6",
-			"Rev": "18db6e68d8fd9cbf2e8ebe4c81a78b96fd9bf05a"
+			"Comment": "v0.5.0",
+			"Rev": "aabad6e819789e569bd6aabf444c935aa9ba1e44"
+		},
+		{
+			"ImportPath": "github.com/dchest/uniuri",
+			"Rev": "a64716164ed9ab199e34c152969bfb6b8748dbb9"
+		},
+		{
+			"ImportPath": "github.com/dgrijalva/jwt-go",
+			"Comment": "v2.3.0-6-gf62f64e",
+			"Rev": "f62f64ea222e5e6d6d86421b5507b0862a3ebf7f"
 		},
 		{
 			"ImportPath": "github.com/empirefox/gin-oauth2",
-			"Rev": "9e305b002a55b26a8830b0ff5176a3af832903dd"
+			"Rev": "446b51762ee3ab42290e7562d4a05a006dae1b7b"
+		},
+		{
+			"ImportPath": "github.com/empirefox/gotool/dp",
+			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
+		},
+		{
+			"ImportPath": "github.com/empirefox/gotool/paas",
+			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
 		},
 		{
 			"ImportPath": "github.com/empirefox/gotool/ws",
-			"Rev": "6cb5317ab05eb61d69ccf82b97c9932a7247413c"
+			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
+		},
+		{
+			"ImportPath": "github.com/empirefox/tagsjson/tagjson",
+			"Rev": "8fd66fe21d9dee8fa15bbb420460ccd6ecb429b7"
+		},
+		{
+			"ImportPath": "github.com/fatih/structs",
+			"Rev": "c701457aaa1ff6709d5e35fccb5c129448e0a37b"
 		},
 		{
 			"ImportPath": "github.com/gin-gonic/contrib/secure",
-			"Rev": "8cd6643cdcdfe5c50973a8e5a11934f7315d58d6"
-		},
-		{
-			"ImportPath": "github.com/gin-gonic/contrib/static",
-			"Rev": "8cd6643cdcdfe5c50973a8e5a11934f7315d58d6"
+			"Rev": "14f66d54cdb96059bafca98665bcc6d9df4951f2"
 		},
 		{
 			"ImportPath": "github.com/gin-gonic/gin",
-			"Comment": "v0.6-2-gbd2c864",
-			"Rev": "bd2c8643467007ae1be5c108306e14f1e768c10b"
+			"Comment": "v1.0rc1-148-g52fcc5d",
+			"Rev": "52fcc5dbf6e94df33ad313858fb94b713e9d1b4a"
 		},
 		{
 			"ImportPath": "github.com/golang/glog",
-			"Rev": "44145f04b68cf362d9c4df2182967c2275eaefed"
-		},
-		{
-			"ImportPath": "github.com/gorilla/context",
-			"Rev": "215affda49addc4c8ef7e2534915df2c8c35c6cd"
-		},
-		{
-			"ImportPath": "github.com/gorilla/securecookie",
-			"Rev": "8e98dd730fc43f1383f19615db6f2e702c9738e8"
-		},
-		{
-			"ImportPath": "github.com/gorilla/sessions",
-			"Rev": "f61c3ec2cf65d69e7efedfd4d060fe128882c951"
+			"Rev": "fca8c8854093a154ff1eb580aae10276ad6b1b5f"
 		},
 		{
 			"ImportPath": "github.com/gorilla/websocket",
-			"Rev": "1551221275a7bd42978745a376b2531f791d88f3"
+			"Rev": "f71d4a996ff3687f2051ff11aca8b570ef785b2b"
 		},
 		{
-			"ImportPath": "github.com/jaytaylor/uuid",
-			"Rev": "4163554da49bc387978c191e2d422a37c162e83c"
+			"ImportPath": "github.com/itsjamie/gin-cors",
+			"Rev": "fa65524ba44fd80566a2e3923d1504d55e54f586"
 		},
 		{
 			"ImportPath": "github.com/jinzhu/gorm",
-			"Rev": "371cd41204f51c6236193dd82e75edf20b46961d"
+			"Rev": "96f2bc40c701112de17de7a82d6e271052d36737"
 		},
 		{
 			"ImportPath": "github.com/jtolds/gls",
 			"Rev": "9a4a02dbe491bef4bab3c24fd9f3087d6c4c6690"
 		},
 		{
-			"ImportPath": "github.com/julienschmidt/httprouter",
-			"Rev": "8c199fb6259ffc1af525cc3ad52ee60ba8359669"
+			"ImportPath": "github.com/lib/pq",
+			"Comment": "go1.0-cutoff-60-gffe986a",
+			"Rev": "ffe986aba3e6cfcded8b06615965941408891ef0"
 		},
 		{
-			"ImportPath": "github.com/lib/pq",
-			"Comment": "go1.0-cutoff-47-g93e9980",
-			"Rev": "93e9980741c9e593411b94e07d5bad8cfb4809db"
+			"ImportPath": "github.com/manucorporat/sse",
+			"Rev": "fe6ea2c8e398672518ef204bf0fbd9af858d0e15"
 		},
 		{
 			"ImportPath": "github.com/mattn/go-colorable",
-			"Rev": "d67e0b7d1797975196499f79bcc322c08b9f218b"
+			"Rev": "40e4aedc8fabf8c23e040057540867186712faa5"
+		},
+		{
+			"ImportPath": "github.com/pquerna/ffjson/fflib/v1",
+			"Rev": "184f78649ba053f484de46921391e6d0c6f5172f"
+		},
+		{
+			"ImportPath": "github.com/qor/inflection",
+			"Rev": "3272df6c21d04180007eb3349844c89a3856bc25"
 		},
 		{
 			"ImportPath": "github.com/smartystreets/assertions",
-			"Comment": "1.5.0-380-g4727d76",
-			"Rev": "4727d767ce8a81811c40eedc2a836c85aebb4d09"
+			"Comment": "1.5.0-397-gac6b6f6",
+			"Rev": "ac6b6f68ca3d6ac00a360d0fad0c844859ad131b"
 		},
 		{
 			"ImportPath": "github.com/smartystreets/goconvey/convey",
-			"Comment": "1.5.0-390-g7a3785c",
-			"Rev": "7a3785c3002a330211525464d402c07b2afce5a7"
+			"Comment": "1.5.0-412-gbf05a3a",
+			"Rev": "bf05a3a16dad006e63e899124a2c6125028f6b31"
 		},
 		{
 			"ImportPath": "golang.org/x/net/context",
-			"Rev": "a8c61998a557a37435f719980da368469c10bfed"
+			"Rev": "cd8c2701a5e10f044db915e65eac68f738399d22"
 		},
 		{
 			"ImportPath": "golang.org/x/oauth2",
-			"Rev": "ec6d5d770f531108a6464462b2201b74fcd09314"
+			"Rev": "ef4eca6b097fad7cec79afcc278d213a6de1c960"
+		},
+		{
+			"ImportPath": "gopkg.in/bluesuncorp/validator.v5",
+			"Comment": "v5.12",
+			"Rev": "d5acf1dac43705f8bfbb71d878e290e2bed3950b"
 		}
 	]
 }
