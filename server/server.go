@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
+	"github.com/golang/glog"
 
 	"github.com/empirefox/gin-oauth2"
 	"github.com/empirefox/gotool/dp"
@@ -46,7 +47,7 @@ func (s *Server) Run() error {
 		NewUserFunc: func() goauth.OauthUser { return &account.Oauth{} },
 	}
 	if err := account.AddGoauthProviders(s.goauthConfig, s.OauthGroupName); err != nil {
-		panic(err)
+		glog.Errorln(err)
 	}
 	authMiddleWare := goauth.Middleware(s.goauthConfig)
 
@@ -73,6 +74,7 @@ func (s *Server) Run() error {
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
 	sys.POST("/clear-tables", s.PostClearTables)
+	sys.POST("/create-tables", s.PostCreateTables)
 	sys.POST("/oauth", s.PostSaveOauth)
 
 	// peer from ONE client

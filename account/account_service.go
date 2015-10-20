@@ -21,6 +21,10 @@ func SetService(a AccountService) {
 }
 
 func ClearTables() error {
+	return aservice.DropTables()
+}
+
+func CreateTables() error {
 	err := aservice.DropTables()
 	if err != nil {
 		return err

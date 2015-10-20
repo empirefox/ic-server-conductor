@@ -36,3 +36,16 @@ func (s *Server) PostClearTables(c *gin.Context) {
 	}
 	c.AbortWithStatus(http.StatusOK)
 }
+
+func (s *Server) PostCreateTables(c *gin.Context) {
+	allow, _ := strconv.ParseBool(os.Getenv("ALLOW_CLEAR_TABLES"))
+	if !allow {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	if err := account.CreateTables(); err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.AbortWithStatus(http.StatusOK)
+}
