@@ -33,7 +33,7 @@ type Oauth struct {
 	ID        uint      `gorm:"primary_key"               UserInfo:""`
 	CreatedAt time.Time `                                 UserInfo:"-"`
 	UpdatedAt time.Time `                                 UserInfo:"-"`
-	Name      string    `sql:"type:varchar(128);not null" UserInfo:""`
+	Name      string    `sql:"type:varchar(128)"          UserInfo:""`
 	Account   Account   `                                 UserInfo:""`
 	AccountId uint      `                                 UserInfo:""`
 	Oid       string    `sql:"type:varchar(128);not null" UserInfo:"-"`

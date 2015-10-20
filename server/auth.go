@@ -9,7 +9,6 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
 	"github.com/empirefox/ic-server-conductor/account"
-	"github.com/empirefox/ic-server-conductor/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/itsjamie/gin-cors"
@@ -27,7 +26,7 @@ func CheckIsSystemMode(c *gin.Context) {
 
 func (s *Server) Cors(method string) gin.HandlerFunc {
 	return cors.Middleware(cors.Config{
-		Origins:         utils.GetEnv("ORIGINS", "*"),
+		Origins:         s.Origins,
 		Methods:         method,
 		RequestHeaders:  "Origin, Authorization, Content-Type",
 		ExposedHeaders:  "",

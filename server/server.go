@@ -2,6 +2,7 @@ package server
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/contrib/secure"
 	"github.com/gin-gonic/gin"
@@ -21,6 +22,7 @@ const (
 )
 
 type Server struct {
+	Origins         string
 	ClaimsKey       string
 	UserKey         string
 	OneAlg          string
@@ -39,10 +41,12 @@ func (s *Server) Run() error {
 	dp.SetDevMode(paas.IsDevMode)
 	corsMiddleWare := s.Cors("GET, PUT, POST, DELETE")
 
-	providers, _ := account.GoauthProviders(s.OauthGroupName)
 	s.goauthConfig = &goauth.Config{
-		Providers:   providers,
+		Origin:      strings.TrimSpace(strings.Split(s.Origins, ",")[0]),
 		NewUserFunc: func() goauth.OauthUser { return &account.Oauth{} },
+	}
+	if err := account.AddGoauthProviders(s.goauthConfig, s.OauthGroupName); err != nil {
+		panic(err)
 	}
 	authMiddleWare := goauth.Middleware(s.goauthConfig)
 
@@ -99,7 +103,7 @@ func (s *Server) Run() error {
 
 	// many and one login rest api
 	// compatible with Satellizer
-	for path := range providers {
+	for path := range s.goauthConfig.Providers {
 		router.POST(path, corsMiddleWare, authMiddleWare, s.Ok)
 		router.OPTIONS(path, corsMiddleWare, s.Ok)
 	}

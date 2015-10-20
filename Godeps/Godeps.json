@@ -21,19 +21,19 @@
 		},
 		{
 			"ImportPath": "github.com/empirefox/gin-oauth2",
-			"Rev": "446b51762ee3ab42290e7562d4a05a006dae1b7b"
+			"Rev": "a9b311d86d5bb6ca8fff10601bac649ea5a03fdd"
 		},
 		{
 			"ImportPath": "github.com/empirefox/gotool/dp",
-			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
+			"Rev": "d30e1ac68aa03f120ad9acdf6da074034654d696"
 		},
 		{
 			"ImportPath": "github.com/empirefox/gotool/paas",
-			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
+			"Rev": "d30e1ac68aa03f120ad9acdf6da074034654d696"
 		},
 		{
 			"ImportPath": "github.com/empirefox/gotool/ws",
-			"Rev": "1be71b7da23a2a25926cddc146699616558a6edc"
+			"Rev": "d30e1ac68aa03f120ad9acdf6da074034654d696"
 		},
 		{
 			"ImportPath": "github.com/empirefox/tagsjson/tagjson",
@@ -110,6 +110,14 @@
 		{
 			"ImportPath": "golang.org/x/oauth2",
 			"Rev": "ef4eca6b097fad7cec79afcc278d213a6de1c960"
+		},
+		{
+			"ImportPath": "google.golang.org/cloud/compute/metadata",
+			"Rev": "4bea1598a0936d6d116506b59a8e1aa962b585c3"
+		},
+		{
+			"ImportPath": "google.golang.org/cloud/internal",
+			"Rev": "4bea1598a0936d6d116506b59a8e1aa962b585c3"
 		},
 		{
 			"ImportPath": "gopkg.in/bluesuncorp/validator.v5",

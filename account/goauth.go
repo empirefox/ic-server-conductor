@@ -2,8 +2,7 @@ package account
 
 import (
 	"encoding/json"
-
-	"golang.org/x/oauth2"
+	"strings"
 
 	"github.com/empirefox/gin-oauth2"
 	"github.com/fatih/structs"
@@ -14,12 +13,6 @@ type OauthProvider struct {
 	Name         string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:",omitempty"`
 	ClientID     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:",omitempty"`
 	ClientSecret string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
-	TokenURL     string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
-	RedirectURL  string `json:",omitempty"                    sql:"type:varchar(255);not null"   satellizer:",omitempty"`
-	UserEndpoint string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
-	JsonPathOid  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
-	JsonPathName string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
-	JsonPathPic  string `json:",omitempty" binding:"required" sql:"type:varchar(255);not null"   satellizer:"-"`
 	Disabled     bool   `json:",omitempty"                    sql:"default:false"                satellizer:",omitempty"`
 }
 
@@ -35,24 +28,6 @@ func (op *OauthProvider) ToSatellizer() SatellizerProvider {
 	return p.Map()
 }
 
-func (o *OauthProvider) ToGoauth() goauth.Provider {
-	return goauth.Provider{
-		Config: oauth2.Config{
-			ClientID:     o.ClientID,
-			ClientSecret: o.ClientSecret,
-			RedirectURL:  o.RedirectURL,
-			Endpoint: oauth2.Endpoint{
-				TokenURL: o.TokenURL,
-			},
-		},
-		Name:         o.Name,
-		UserEndpoint: o.UserEndpoint,
-		JsonPathOid:  o.JsonPathOid,
-		JsonPathName: o.JsonPathName,
-		JsonPathPic:  o.JsonPathPic,
-	}
-}
-
 // Can be use by satellizer
 func SatellizerProviders() ([]byte, error) {
 	var ops OauthProviders
@@ -60,15 +35,6 @@ func SatellizerProviders() ([]byte, error) {
 		return nil, err
 	}
 	return json.Marshal(ops.ToSatellizer())
-}
-
-// Can be use by goauth
-func GoauthProviders(grp string) (map[string]goauth.Provider, error) {
-	var ops OauthProviders
-	if err := ops.All(); err != nil {
-		return nil, err
-	}
-	return ops.ToGoauth(grp), nil
 }
 
 type OauthProviders []OauthProvider
@@ -85,13 +51,21 @@ func (ops OauthProviders) ToSatellizer() []SatellizerProvider {
 	return ps
 }
 
-func (ops OauthProviders) ToGoauth(grp string) map[string]goauth.Provider {
-	prefix := grp + "/"
-	ps := make(map[string]goauth.Provider, 0)
+// Can be use by goauth
+func AddGoauthProviders(config *goauth.Config, grp string) error {
+	var ops OauthProviders
+	if err := ops.All(); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(grp, "/") {
+		grp = grp + "/"
+	}
 	for _, op := range ops {
 		if !op.Disabled {
-			ps[prefix+op.Name] = op.ToGoauth()
+			if err := config.AddProvider(op.Name, grp+op.Name, op.ClientID, op.ClientSecret); err != nil {
+				return err
+			}
 		}
 	}
-	return ps
+	return nil
 }
