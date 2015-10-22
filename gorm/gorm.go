@@ -23,17 +23,16 @@ func init() {
 		return
 	}
 
-	paasGorm := paas.GetGorm()
-	if paasGorm.Url == "" {
+	if paas.Gorm.Url == "" {
 		panic("'DB_URL' must be set, or set TEST_NO_DB=true for test.")
 	}
 
 	var err error
-	DB, err = gorm.Open(paasGorm.Dialect, paasGorm.Url)
+	DB, err = gorm.Open(paas.Gorm.Dialect, paas.Gorm.Url)
 	if err != nil {
 		panic(fmt.Sprintf("No error should happen when connect database, but got %+v", err))
 	}
 
-	DB.DB().SetMaxIdleConns(paasGorm.MaxIdle)
-	DB.DB().SetMaxOpenConns(paasGorm.MaxOpen)
+	DB.DB().SetMaxIdleConns(paas.Gorm.MaxIdle)
+	DB.DB().SetMaxOpenConns(paas.Gorm.MaxOpen)
 }

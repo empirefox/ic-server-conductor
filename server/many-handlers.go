@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
 	gws "github.com/empirefox/gotool/ws"
 	"github.com/empirefox/ic-server-conductor/account"
@@ -36,10 +35,7 @@ func (s *Server) GetSystemData(c *gin.Context) {
 		return
 	}
 
-	data, _ := json.Marshal(gin.H{
-		"DevProd":   dp.Mode,
-		"ApiDomain": paas.SubDomain,
-	})
+	data, _ := json.Marshal(paas.Info)
 	c.String(http.StatusOK, fmt.Sprintf(`var ApiData=%s`, data))
 }
 

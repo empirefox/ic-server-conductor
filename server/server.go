@@ -9,7 +9,6 @@ import (
 	"github.com/golang/glog"
 
 	"github.com/empirefox/gin-oauth2"
-	"github.com/empirefox/gotool/dp"
 	"github.com/empirefox/gotool/paas"
 	"github.com/empirefox/ic-server-conductor/account"
 	"github.com/empirefox/ic-server-conductor/conn"
@@ -39,7 +38,6 @@ func (s *Server) Ok(c *gin.Context)       { c.AbortWithStatus(http.StatusOK) }
 func (s *Server) NotFound(c *gin.Context) { c.AbortWithStatus(http.StatusNotFound) }
 
 func (s *Server) Run() error {
-	dp.SetDevMode(paas.IsDevMode)
 	corsMiddleWare := s.Cors("GET, PUT, POST, DELETE")
 
 	s.goauthConfig = &goauth.Config{
@@ -110,5 +108,5 @@ func (s *Server) Run() error {
 		router.OPTIONS(path, corsMiddleWare, s.Ok)
 	}
 
-	return router.Run(paas.GetBindAddr())
+	return router.Run(paas.BindAddr)
 }

@@ -26,7 +26,7 @@ const (
 )
 
 var (
-	MainServer = os.Getenv("MAIN_SERVER")
+	Origin string
 
 	Upgrader = websocket.Upgrader{
 		ReadBufferSize:  4096,
@@ -34,7 +34,7 @@ var (
 		CheckOrigin: func(r *http.Request) bool {
 			// https://xxx.xxx.com
 			origin := r.Header["Origin"]
-			if len(origin) == 0 || origin[0] == MainServer {
+			if len(origin) == 0 || origin[0] == Origin {
 				return true
 			}
 			u, err := url.Parse(origin[0])
@@ -42,7 +42,7 @@ var (
 				return false
 			}
 			o := strings.Split(u.Host, ":")[0]
-			return o == paas.SubDomain || strings.HasSuffix(o, ".luck2.me") || o == strings.Split(r.Host, ":")[0]
+			return o == paas.Info.HttpDomain || o == strings.Split(r.Host, ":")[0]
 		},
 	}
 
