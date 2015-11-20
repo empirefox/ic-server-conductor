@@ -6,11 +6,12 @@ package gorm
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"github.com/empirefox/gotool/paas"
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
-	//	_ "github.com/go-sql-driver/mysql"
+	//	_ "github.com/lib/pq"
+	_ "github.com/go-sql-driver/mysql"
 	//	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -32,6 +33,9 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("No error should happen when connect database, but got %+v", err))
 	}
+
+	debug, _ := strconv.ParseBool(os.Getenv("GORM_DEBUG"))
+	DB.LogMode(debug)
 
 	DB.DB().SetMaxIdleConns(paas.Gorm.MaxIdle)
 	DB.DB().SetMaxOpenConns(paas.Gorm.MaxOpen)

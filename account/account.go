@@ -177,14 +177,15 @@ func (o *One) RawViewsByShare() (*json.RawMessage, error) {
 	return tagjson.MarshalR(aos, ViewByShare)
 }
 
+// Fix bug for mysql. See https://github.com/yanfali/gorm/commit/8545f588249455f922d415a699e0526c779a1639
 /////////////////////////////////////////
 //              AccountOne
 /////////////////////////////////////////
 
 // tagjson: {"ViewByViewer":"e","ViewByShare":"e"}
 type AccountOne struct {
-	AccountId    uint      `gorm:"primary_key"      ViewByViewer:"-" ViewByShare:""`
-	OneId        uint      `gorm:"primary_key"      ViewByViewer:""  ViewByShare:"-"`
+	AccountId    uint      `gorm:"primary_key;foreignkey"      ViewByViewer:"-" ViewByShare:""`
+	OneId        uint      `gorm:"primary_key;foreignkey"      ViewByViewer:""  ViewByShare:"-"`
 	ViewByShare  string    `sql:"type:varchar(128)" ViewByViewer:"-" ViewByShare:""`
 	ViewByViewer string    `sql:"type:varchar(128)" ViewByViewer:""  ViewByShare:"-"`
 	CreatedAt    time.Time `                        ViewByViewer:""  ViewByShare:""`
