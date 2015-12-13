@@ -121,15 +121,6 @@ func preProccessSignaling(h conn.Hub, info *StartSignalingInfo, o *account.Oauth
 	return res
 }
 
-func (s *Server) PostNewToken(c *gin.Context) {
-	tokenObj, err := s.goauthConfig.NewToken(c.Keys[s.UserKey].(*account.Oauth))
-	if err != nil {
-		c.AbortWithError(http.StatusInternalServerError, err)
-		return
-	}
-	c.JSON(http.StatusOK, tokenObj)
-}
-
 func (s *Server) GetAccountProviders(c *gin.Context) {
 	o := c.Keys[s.UserKey].(*account.Oauth)
 	ps := []string{}

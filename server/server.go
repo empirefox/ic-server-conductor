@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	SK_SYS = "system"
+	SK_SYS   = "system"
+	SK_PROXY = "proxy"
 )
 
 type Server struct {
@@ -31,6 +32,7 @@ type Server struct {
 	IsDevMode       bool
 	OnEngineCreated func(*gin.Engine)
 	OauthGroupName  string
+	Proxied         []string
 	goauthConfig    *goauth.Config
 }
 
@@ -41,8 +43,9 @@ func (s *Server) Run() error {
 	corsMiddleWare := s.Cors("GET, PUT, POST, DELETE")
 
 	s.goauthConfig = &goauth.Config{
-		Origin:      strings.TrimSpace(strings.Split(s.Origins, ",")[0]),
-		NewUserFunc: func() goauth.OauthUser { return &account.Oauth{} },
+		GinClaimsKey: s.ClaimsKey,
+		Origin:       strings.TrimSpace(strings.Split(s.Origins, ",")[0]),
+		NewUserFunc:  func() goauth.OauthUser { return &account.Oauth{} },
 	}
 	if err := account.AddGoauthProviders(s.goauthConfig, s.OauthGroupName); err != nil {
 		glog.Errorln(err)
@@ -69,6 +72,10 @@ func (s *Server) Run() error {
 	router.GET("/sys-data.js", s.GetSystemData)
 	router.GET("/oauth/oauths", corsMiddleWare, s.GetOauths)
 	router.OPTIONS("/oauth/oauths", corsMiddleWare, s.Ok)
+
+	proxy := router.Group("/proxy", s.Auth(SK_PROXY))
+	proxy.GET("/providers", s.GetProxiedProviders)
+	proxy.POST("/token", s.PostProxyToken)
 
 	sys := router.Group("/sys", s.Auth(SK_SYS))
 	sys.POST("/clear-tables", s.PostClearTables)

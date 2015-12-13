@@ -178,6 +178,9 @@ func (o *One) RawViewsByShare() (*json.RawMessage, error) {
 }
 
 // Fix bug for mysql. See https://github.com/yanfali/gorm/commit/8545f588249455f922d415a699e0526c779a1639
+// For mysql add:
+// CREATE TRIGGER `account_del_oauths` BEFORE DELETE ON `accounts`
+// FOR EACH ROW DELETE FROM oauths WHERE oauths.account_id =  OLD.id
 /////////////////////////////////////////
 //              AccountOne
 /////////////////////////////////////////

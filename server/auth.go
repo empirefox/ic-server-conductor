@@ -9,6 +9,7 @@ import (
 	"github.com/dgrijalva/jwt-go"
 	"github.com/empirefox/gotool/paas"
 	"github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/ic-server-conductor/proxy"
 	"github.com/gin-gonic/gin"
 	"github.com/golang/glog"
 	"github.com/itsjamie/gin-cors"
@@ -42,6 +43,67 @@ func (s *Server) SecureWs(c *gin.Context) {
 		c.Abort()
 		return
 	}
+}
+
+func (s *Server) PostNewToken(c *gin.Context) {
+	tokenObj, err := s.goauthConfig.NewToken(c.Keys[s.UserKey].(*account.Oauth))
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, tokenObj)
+}
+
+func (s *Server) PostProxyToken(c *gin.Context) {
+	var data proxy.PostProxyTokenData
+	if err := c.BindJSON(&data); err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	reqToken, err := jwt.Parse(data.Token, s.goauthConfig.FindVerifyKey)
+	if err != nil {
+		c.AbortWithError(http.StatusUnauthorized, err)
+		return
+	}
+
+	c.Set(s.ClaimsKey, reqToken.Claims)
+	s.goauthConfig.BindUser(c)
+	if _, ok := c.Get("invalide-user"); ok {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+
+	tokenObj, err := s.goauthConfig.HandleUserInfo(c, &data.Info)
+	if err != nil {
+		c.AbortWithError(http.StatusInternalServerError, err)
+		return
+	}
+	c.JSON(http.StatusOK, tokenObj)
+}
+
+func (s *Server) findProxyProvider(name string) (*proxy.Provider, bool) {
+	for k, v := range s.goauthConfig.Providers {
+		if v.Name == name {
+			return &proxy.Provider{
+				Name:         name,
+				Path:         k,
+				ClientID:     v.ClientID,
+				ClientSecret: v.ClientSecret,
+			}, true
+		}
+	}
+	return nil, false
+}
+
+func (s *Server) GetProxiedProviders(c *gin.Context) {
+	var ps []proxy.Provider
+	for _, name := range s.Proxied {
+		if p, ok := s.findProxyProvider(name); ok {
+			ps = append(ps, *p)
+		}
+	}
+	c.JSON(http.StatusOK, ps)
 }
 
 func (s *Server) Auth(kid string) gin.HandlerFunc {
