@@ -74,12 +74,10 @@ func (s *Server) PostProxyToken(c *gin.Context) {
 		return
 	}
 
-	tokenObj, err := s.goauthConfig.HandleUserInfo(c, &data.Info)
+	err = s.goauthConfig.HandleUserInfo(c, &data.Info)
 	if err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
-		return
 	}
-	c.JSON(http.StatusOK, tokenObj)
 }
 
 func (s *Server) findProxyProvider(name string) (*proxy.Provider, bool) {
