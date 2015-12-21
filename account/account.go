@@ -9,13 +9,6 @@ import (
 	"github.com/golang/glog"
 )
 
-const (
-	UserInfo = iota
-	UserRooms
-	ViewByViewer
-	ViewByShare
-)
-
 var (
 	ErrLinkSelf      = errors.New("Cannot link account with self")
 	ErrUnLinkSelf    = errors.New("Cannot unlink account with self")
@@ -114,7 +107,7 @@ type Account struct {
 	CreatedAt time.Time `                                   UserInfo:"-"`
 	UpdatedAt time.Time `                                   UserInfo:"-"`
 	Name      string    `sql:"type:varchar(128);not null"   UserInfo:""`
-	Desc      string    `sql:"type:varchar(128);default:''" UserInfo:""`
+	Dsc       string    `sql:"type:varchar(128);default:''" UserInfo:""`
 	Oauths    []Oauth   `                                   UserInfo:"-"`
 	Ones      Ones      `gorm:"many2many:account_ones;"     UserInfo:"-"`
 	Enabled   bool      `sql:"default:true"                 UserInfo:"-"`
@@ -152,7 +145,7 @@ type One struct {
 	CreatedAt time.Time `                                   upd:"-"               UserRooms:""`
 	UpdatedAt time.Time `                                   upd:"-"               UserRooms:""`
 	Name      string    `sql:"type:varchar(32);not null"    upd:",-o,+i;lmax(32)" UserRooms:""`
-	Desc      string    `sql:"type:varchar(128);default:''" upd:",-o;lmax(128)"   UserRooms:""`
+	Dsc       string    `sql:"type:varchar(128);default:''" upd:",-o;lmax(128)"   UserRooms:""`
 	Addr      string    `sql:"not null;type:varchar(128)"   upd:"-"               UserRooms:"-"`
 	Enabled   bool      `sql:"default:true"                 upd:",-o"             UserRooms:""`
 	Owner     Account   `                                   upd:"-"               UserRooms:"-"`
@@ -177,7 +170,6 @@ func (o *One) RawViewsByShare() (*json.RawMessage, error) {
 	return tagjson.MarshalR(aos, ViewByShare)
 }
 
-// Fix bug for mysql. See https://github.com/yanfali/gorm/commit/8545f588249455f922d415a699e0526c779a1639
 // For mysql add:
 // CREATE TRIGGER `account_del_oauths` BEFORE DELETE ON `accounts`
 // FOR EACH ROW DELETE FROM oauths WHERE oauths.account_id =  OLD.id
@@ -187,11 +179,11 @@ func (o *One) RawViewsByShare() (*json.RawMessage, error) {
 
 // tagjson: {"ViewByViewer":"e","ViewByShare":"e"}
 type AccountOne struct {
-	AccountId    uint      `gorm:"primary_key;foreignkey"      ViewByViewer:"-" ViewByShare:""`
-	OneId        uint      `gorm:"primary_key;foreignkey"      ViewByViewer:""  ViewByShare:"-"`
-	ViewByShare  string    `sql:"type:varchar(128)" ViewByViewer:"-" ViewByShare:""`
-	ViewByViewer string    `sql:"type:varchar(128)" ViewByViewer:""  ViewByShare:"-"`
-	CreatedAt    time.Time `                        ViewByViewer:""  ViewByShare:""`
+	AccountId    uint      `gorm:"primary_key" sql:"auto_increment:false" ViewByViewer:"-" ViewByShare:""`
+	OneId        uint      `gorm:"primary_key" sql:"auto_increment:false" ViewByViewer:""  ViewByShare:"-"`
+	ViewByShare  string    `                   sql:"type:varchar(128)"    ViewByViewer:"-" ViewByShare:""`
+	ViewByViewer string    `                   sql:"type:varchar(128)"    ViewByViewer:""  ViewByShare:"-"`
+	CreatedAt    time.Time `                                              ViewByViewer:""  ViewByShare:""`
 }
 
 // tagjson: include

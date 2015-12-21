@@ -15,6 +15,7 @@ import (
 	"github.com/empirefox/ic-server-conductor/conn/many"
 	"github.com/empirefox/ic-server-conductor/conn/one"
 	"github.com/empirefox/ic-server-conductor/invite"
+	"github.com/empirefox/ic-server-conductor/utils"
 )
 
 const (
@@ -40,6 +41,7 @@ func (s *Server) Ok(c *gin.Context)       { c.AbortWithStatus(http.StatusOK) }
 func (s *Server) NotFound(c *gin.Context) { c.AbortWithStatus(http.StatusNotFound) }
 
 func (s *Server) Run() error {
+	utils.Origin = s.Origins
 	corsMiddleWare := s.Cors("GET, PUT, POST, DELETE")
 
 	s.goauthConfig = &goauth.Config{
@@ -70,8 +72,12 @@ func (s *Server) Run() error {
 
 	// peer from MANY client
 	router.GET("/sys-data.js", s.GetSystemData)
-	router.GET("/oauth/oauths", corsMiddleWare, s.GetOauths)
-	router.OPTIONS("/oauth/oauths", corsMiddleWare, s.Ok)
+
+	roauth := router.Group("/oauth", corsMiddleWare)
+	roauth.GET("/oauths", s.GetOauths)
+	roauth.OPTIONS("/oauths", s.Ok)
+	roauth.GET("/proxied", s.GetProxied)
+	roauth.OPTIONS("/proxied", s.Ok)
 
 	proxy := router.Group("/proxy", s.Auth(SK_PROXY))
 	proxy.GET("/providers", s.GetProxiedProviders)

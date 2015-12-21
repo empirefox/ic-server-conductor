@@ -179,9 +179,9 @@ func (accountService) OnLogin(o *Oauth, provider, oid, name, pic string) error {
 	if provider == "" || oid == "" || name == "" {
 		return ErrParamsRequired
 	}
-	w := Oauth{Provider: provider, Oid: oid, Picture: pic, Enabled: true}
+	w := Oauth{Provider: provider, Oid: oid, Enabled: true}
 	w.Name = name
-	attr := Oauth{}
+	attr := Oauth{Picture: pic}
 	attr.Account.Name = name
 	attr.Account.Enabled = true
 	return DB.Where(&w).Attrs(&attr).Preload("Account").FirstOrCreate(o).Error

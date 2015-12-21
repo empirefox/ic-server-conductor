@@ -8,12 +8,13 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/empirefox/ic-server-conductor/account"
+	"github.com/empirefox/tagsjson/tagjson"
 )
 
 func (s *Server) PostSaveOauth(c *gin.Context) {
 	var op account.OauthProvider
-	if err := c.Bind(&op); err != nil {
-		c.AbortWithError(http.StatusBadRequest, err)
+	if errs, ok := tagjson.NewDecoder(account.PrdSave).DecodeReaderV(c.Request.Body, &op); !ok {
+		c.JSON(http.StatusBadRequest, errs)
 		return
 	}
 

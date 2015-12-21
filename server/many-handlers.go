@@ -25,6 +25,8 @@ func (s *Server) GetOauths(c *gin.Context) {
 	}
 }
 
+func (s *Server) GetProxied(c *gin.Context) { c.JSON(http.StatusOK, s.Proxied) }
+
 func (s *Server) GetSystemData(c *gin.Context) {
 	e := `sys-data`
 	c.Header("Etag", e)
