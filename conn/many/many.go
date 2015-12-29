@@ -36,6 +36,8 @@ func newControlUser(h conn.Hub, ws *websocket.Conn) *controlUser {
 	}
 }
 
+func (room *controlUser) Tag() string { return "user" }
+
 func (many *controlUser) Id() uint {
 	if many.Oauth == nil {
 		return 0
@@ -43,13 +45,8 @@ func (many *controlUser) Id() uint {
 	return many.AccountId
 }
 
-func (many *controlUser) GetOauth() *Oauth {
-	return many.Oauth
-}
-
-func (many *controlUser) Send(msg []byte) {
-	many.send <- msg
-}
+func (many *controlUser) GetOauth() *Oauth { return many.Oauth }
+func (many *controlUser) Send(msg []byte)  { many.send <- msg }
 
 func (many *controlUser) SendObj(obj interface{}) {
 	msg, err := json.Marshal(obj)
@@ -70,43 +67,8 @@ func (many *controlUser) RoomOnes() ([]One, error) {
 	return many.Account.Ones, nil
 }
 
-func (many *controlUser) SendUserRoomList() {
-	ones, err := many.RawRooms()
-	if err != nil {
-		many.Send(GetTypedInfo("Cannot get rooms"))
-		return
-	}
-	many.SendObj(gin.H{"type": "Rooms", "content": ones})
-}
-
-func (many *controlUser) SendChangeRoomContent(oneId uint, ipcams *json.RawMessage) {
-	many.SendObj(gin.H{"type": "Room", "id": oneId, "content": ipcams})
-}
-
-func (many *controlUser) SendUserRoomsContent() {
-	ones := many.Account.Ones
-	if ones == nil {
-		return
-	}
-	for i := range ones {
-		if room, ok := many.hub.GetRoom(ones[i].ID); ok {
-			many.SendChangeRoomContent(ones[i].ID, room.Ipcams())
-		}
-	}
-}
-
-func (many *controlUser) SendUserRoomsView() {
-	if views, err := many.Oauth.RawViewsByViewer(); err != nil {
-		many.Send(GetTypedInfo("Cannot get views"))
-	} else {
-		many.SendObj(gin.H{"type": "RoomViews", "content": views})
-	}
-}
-
-func (many *controlUser) SendUserIpcams() {
-	many.SendUserRoomList()
-	many.SendUserRoomsContent()
-	many.SendUserRoomsView()
+func (many *controlUser) T2M(oneId uint, k []byte, part *json.RawMessage) {
+	many.SendObj(gin.H{"type": "T2M", "ID": oneId, "name": string(k), "part": part})
 }
 
 // with ping
@@ -194,6 +156,7 @@ func AuthMws(ws conn.Ws, vf conn.VerifyFunc) (*Oauth, error) {
 	}
 	o := &Oauth{}
 	if err = vf(o, token); err != nil {
+		glog.Infoln(string(token))
 		ws.WriteMessage(websocket.TextMessage, []byte(`{"type":"LoginFailed"}`))
 		return nil, err
 	}
@@ -201,6 +164,21 @@ func AuthMws(ws conn.Ws, vf conn.VerifyFunc) (*Oauth, error) {
 		return nil, err
 	}
 	return o, nil
+}
+
+func (many *controlUser) SendUserIpcams() {
+	ones, err := many.RawRooms()
+	if err != nil {
+		many.Send(GetTypedInfo("Cannot get rooms"))
+		return
+	}
+	many.SendObj(gin.H{"type": "Rooms", "rooms": ones})
+
+	if views, err := many.Oauth.RawViewsByViewer(); err != nil {
+		many.Send(GetTypedInfo("Cannot get views"))
+	} else {
+		many.SendObj(gin.H{"type": "RoomViews", "views": views})
+	}
 }
 
 func HandleManyCtrl(h conn.Hub, vf conn.VerifyFunc) gin.HandlerFunc {
@@ -219,10 +197,13 @@ func HandleManyCtrl(h conn.Hub, vf conn.VerifyFunc) gin.HandlerFunc {
 		many := newControlUser(h, ws)
 		many.Oauth = o
 
+		go many.writePump()
+		// need after writePump
+		many.SendUserIpcams()
+
 		many.hub.OnJoin(many)
 		defer func() { many.hub.OnLeave(many) }()
 
-		go many.writePump()
 		many.readPump()
 	}
 }
@@ -253,7 +234,7 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 	}
 
 	switch cmd.Name {
-	case "ManageSetRoomName":
+	case "ManageSetRoom":
 		// Content: new_name
 		// Proccess in server
 		one.Name = string(cmd.Value())
@@ -262,27 +243,36 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 			many.Send(GetTypedInfo("SetRoomName Error"))
 			return
 		}
-		msg := []byte(fmt.Sprintf(`{
-			"type":"Response","to":"ManageSetRoomName",
-			"content":{"ID":%d,"Name":"%s"}
-		}`, one.ID, one.Name))
-		many.Send(msg)
+		part, err := one.RawUserRoom()
+		if err != nil {
+			glog.Errorln(err)
+			many.Send(GetTypedInfo("Get user room view error"))
+			return
+		}
+
+		k := []byte("One")
+		room, ok := many.hub.GetRoom(cmd.Room)
+		if ok {
+			room.BroadcastT2M(k, *part)
+			return
+		}
+		many.T2M(one.ID, k, part)
+
 	case "ManageDelRoom":
+		room, ok := many.hub.GetRoom(cmd.Room)
+		if ok {
+			room.Remove()
+			return
+		}
+
 		if err := one.Delete(); err != nil {
 			glog.Errorln(err)
 			many.Send(GetTypedInfo("DelRoom Error"))
 			return
 		}
-		room, ok := many.hub.GetRoom(cmd.Room)
-		if ok {
-			room.Close()
-		}
-		msg := []byte(fmt.Sprintf(`{
-			"type":"Response","to":"ManageDelRoom",
-			"content":%d
-		}`, one.ID))
-		many.Send(msg)
-	case "ManageGetIpcam", "ManageSetIpcam", "ManageDelIpcam", "ManageReconnectIpcam":
+		many.Send([]byte(fmt.Sprintf(`{"type":"XRoom","ID":%d}`, one.ID)))
+
+	case "ManageGetIpcam", "ManageSetIpcam", "ManageDelIpcam":
 		// Content(string): ipcam_id/ipcam/ipcam_id
 		// Pass to One
 		room, ok := many.hub.GetRoom(cmd.Room)
@@ -291,6 +281,7 @@ func (many *controlUser) onManyCommand(bcmd []byte) {
 			return
 		}
 		room.Send(GetNamedCmd(many.Account.ID, []byte(cmd.Name), cmd.Content))
+
 	default:
 		glog.Errorln("Unknow Command name:", cmd.Name)
 		many.Send(GetTypedInfo("Unknow Command name:" + cmd.Name))

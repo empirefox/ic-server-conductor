@@ -22,20 +22,23 @@ type Connection interface {
 
 type ControlUser interface {
 	Connection
-	SendChangeRoomContent(oneId uint, ipcams *json.RawMessage)
+	Tag() string
+	T2M(oneId uint, k []byte, part *json.RawMessage)
 	RoomOnes() ([]account.One, error)
 	GetOauth() *account.Oauth
 }
 
 type ControlRoom interface {
 	Connection
+	Tag() string
 	Broadcast(msg []byte)
-	Ipcams() *json.RawMessage
+	BroadcastT2M(k []byte, part json.RawMessage)
 	Friends() ([]account.Account, error)
-	AddOnline(id uint, cu ControlUser)
+	AddOnline(id uint, cu ControlUser, tag string)
 	GetOnline(id uint) (ControlUser, bool)
 	RemoveOnline(id uint)
 	GetOne() *account.One
+	Remove()
 }
 
 type Hub interface {

@@ -1,13 +1,16 @@
 package utils
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -69,6 +72,20 @@ func GetStaticDir(dir string) string {
 		dir = filepath.Join(pwd, dir)
 	}
 	return dir
+}
+
+var ErrNoSegContent = errors.New("No seg(:) found in bs")
+
+func ReadO2MSeg(bs []byte) (uint, []byte, []byte, error) {
+	raws := bytes.SplitN(bs, []byte{':'}, 3)
+	if len(raws) < 3 {
+		return 0, nil, nil, ErrNoSegContent
+	}
+	i, err := strconv.Atoi(string(raws[1]))
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	return uint(i), raws[0], raws[2], nil
 }
 
 func GetTypedMsg(t string, m interface{}) ([]byte, error) {

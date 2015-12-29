@@ -61,21 +61,12 @@ func (s *Server) PostProxyToken(c *gin.Context) {
 		return
 	}
 
-	reqToken, err := jwt.Parse(data.Token, s.goauthConfig.FindVerifyKey)
-	if err != nil {
-		c.AbortWithError(http.StatusUnauthorized, err)
-		return
+	if reqToken, err := jwt.Parse(data.Token, s.goauthConfig.FindVerifyKey); err == nil {
+		c.Set(s.ClaimsKey, reqToken.Claims)
+		s.goauthConfig.BindUser(c)
 	}
 
-	c.Set(s.ClaimsKey, reqToken.Claims)
-	s.goauthConfig.BindUser(c)
-	if _, ok := c.Get("invalide-user"); ok {
-		c.AbortWithStatus(http.StatusForbidden)
-		return
-	}
-
-	err = s.goauthConfig.HandleUserInfo(c, &data.Info)
-	if err != nil {
+	if err := s.goauthConfig.HandleUserInfo(c, &data.Info); err != nil {
 		c.AbortWithError(http.StatusInternalServerError, err)
 	}
 }

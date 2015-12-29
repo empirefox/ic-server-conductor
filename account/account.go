@@ -157,11 +157,12 @@ type One struct {
 // tagjson: include
 type Ones []One
 
-func (o *One) Find(id uint) error                 { return aservice.FindOne(o, id) }
-func (o *One) FindIfOwner(id, ownerId uint) error { return aservice.FindOneIfOwner(o, id, ownerId) }
-func (o *One) Save() error                        { return aservice.Save(o) }
-func (o *One) Viewers() error                     { return aservice.Viewers(o) }
-func (o *One) Delete() error                      { return aservice.Delete(o) }
+func (o *One) Find(id uint) error                     { return aservice.FindOne(o, id) }
+func (o *One) FindIfOwner(id, ownerId uint) error     { return aservice.FindOneIfOwner(o, id, ownerId) }
+func (o *One) Save() error                            { return aservice.Save(o) }
+func (o *One) Viewers() error                         { return aservice.Viewers(o) }
+func (o *One) Delete() error                          { return aservice.Delete(o) }
+func (o *One) RawUserRoom() (*json.RawMessage, error) { return tagjson.MarshalR(o, UserRooms) }
 func (o *One) RawViewsByShare() (*json.RawMessage, error) {
 	var aos AccountOnes
 	if err := aservice.ViewsByShare(o, &aos); err != nil {

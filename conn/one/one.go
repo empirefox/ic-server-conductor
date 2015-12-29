@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/dchest/uniuri"
@@ -45,9 +44,9 @@ func newControlRoom(h conn.Hub, ws *websocket.Conn, alg string, manyVerify conn.
 	}
 }
 
-func (room *controlRoom) GetOne() *One {
-	return room.One
-}
+func (room *controlRoom) Tag() string { return "room" }
+
+func (room *controlRoom) GetOne() *One { return room.One }
 
 func (room *controlRoom) Id() uint {
 	if room.One == nil {
@@ -56,18 +55,12 @@ func (room *controlRoom) Id() uint {
 	return room.ID
 }
 
-func (room *controlRoom) Send(msg []byte) {
-	room.send <- msg
-}
+func (room *controlRoom) Send(msg []byte) { room.send <- msg }
 
 func (room *controlRoom) Broadcast(msg []byte) {
 	for _, ctrl := range room.onlines {
 		ctrl.Send(msg)
 	}
-}
-
-func (room *controlRoom) Ipcams() *json.RawMessage {
-	return &room.ipcams
 }
 
 func (room *controlRoom) Friends() ([]Account, error) {
@@ -80,8 +73,16 @@ func (room *controlRoom) Friends() ([]Account, error) {
 	return room.Accounts, nil
 }
 
-func (room *controlRoom) AddOnline(id uint, cu conn.ControlUser) {
+func (room *controlRoom) AddOnline(id uint, cu conn.ControlUser, tag string) {
 	room.onlines[id] = cu
+	switch tag {
+	case "room":
+		cu.Send([]byte(fmt.Sprintf(`{"type":"RoomOnline","ID":%d}`, room.Id())))
+	case "user":
+		room.send <- []byte(fmt.Sprintf(`{"from":%d,"name":"UserOnline"}`, id))
+	default:
+		glog.Errorln("Unknown tag:", tag)
+	}
 }
 
 func (room *controlRoom) GetOnline(id uint) (cu conn.ControlUser, ok bool) {
@@ -154,12 +155,21 @@ func (room *controlRoom) onRead(typ, content []byte) {
 	}
 }
 
+func (room *controlRoom) doTargetT2M(to uint, k []byte, part json.RawMessage) {
+	room.onlines[to].T2M(room.Id(), k, &part)
+}
+
+func (room *controlRoom) BroadcastT2M(k []byte, part json.RawMessage) {
+	for _, ctrl := range room.onlines {
+		ctrl.T2M(room.Id(), k, &part)
+	}
+}
+
 func (room *controlRoom) onReadAuthed(typ, content []byte) {
 	switch string(typ) {
-	case "Ipcams":
-		onOneIpcams(room, content)
-	case "ResponseToMany":
-		onOneResponseToMany(room, content)
+	case "T2M":
+		// "IcIds", "Ic", "IcIdCh", "XIc"
+		room.onT2M(content)
 	case "ServerCommand":
 		onServerCommand(room, content)
 	default:
@@ -176,6 +186,20 @@ func (room *controlRoom) onReadNotAuthed(typ, content []byte) {
 		room.send <- []byte(fmt.Sprintf(`{"name":"%s","content":"%s"}`, n, c))
 	default:
 		glog.Errorln("Unknow command json:", string(typ), string(content))
+	}
+}
+
+func (room *controlRoom) onT2M(withTo []byte) {
+	// [to(From)]:[raw json part]
+	to, k, part, err := utils.ReadO2MSeg(withTo)
+	if err != nil {
+		glog.Errorln(err)
+		return
+	}
+	if to == 0 {
+		room.BroadcastT2M(k, json.RawMessage(part))
+	} else {
+		room.doTargetT2M(to, k, json.RawMessage(part))
 	}
 }
 
@@ -249,7 +273,29 @@ func (room *controlRoom) onLogin(tokenBytes []byte) (res string) {
 	}
 	room.One = one
 	room.hub.OnReg(room)
-	return "LoginOk"
+	return "Broadcast"
+}
+
+func (room *controlRoom) offline() {
+	if room.One == nil {
+		return
+	}
+	room.Broadcast([]byte(fmt.Sprintf(`{"type":"RoomOffline","ID":%d}`, room.Id())))
+	room.hub.OnUnreg(room)
+	room.One = nil
+}
+
+func (room *controlRoom) Remove() {
+	if room.One == nil {
+		return
+	}
+	if err := room.Owner.RemoveOne(room.One); err != nil {
+		glog.Errorln(err)
+	}
+	room.Broadcast([]byte(fmt.Sprintf(`{"type":"XRoom","ID":%d}`, room.Id())))
+	room.hub.OnUnreg(room)
+	room.send <- []byte(`{"name":"BadRoomToken"}`)
+	room.One = nil
 }
 
 func HandleOneCtrl(h conn.Hub, alg string, manyVerify conn.VerifyFunc) gin.HandlerFunc {
@@ -262,28 +308,10 @@ func HandleOneCtrl(h conn.Hub, alg string, manyVerify conn.VerifyFunc) gin.Handl
 		defer ws.Close()
 
 		room := newControlRoom(h, ws, alg, manyVerify)
-		defer func() {
-			h.OnUnreg(room)
-			room.Broadcast([]byte(fmt.Sprintf(`{"type":"RoomOffline","content":%d}`, room.Id())))
-		}()
+		defer room.offline()
 		go room.writePump()
 		room.readPump()
 	}
-}
-
-func onOneResponseToMany(room *controlRoom, infoWithTo []byte) {
-	// [manyId]:[transfer]
-	raws := bytes.SplitN(infoWithTo, []byte{':'}, 2)
-	if len(raws) < 2 {
-		glog.Errorln("No transfer data from one")
-		return
-	}
-	to, err := strconv.Atoi(string(raws[0]))
-	if err != nil {
-		glog.Errorln(err)
-		return
-	}
-	room.onlines[uint(to)].Send(raws[1])
 }
 
 func onServerCommand(room *controlRoom, command []byte) {
@@ -294,17 +322,6 @@ func onServerCommand(room *controlRoom, command []byte) {
 	}
 	switch cmd.Name {
 	case "RemoveRoom":
-		if err := room.Owner.RemoveOne(room.One); err != nil {
-			glog.Errorln(err)
-		}
-		room.One = nil
-		room.send <- []byte(`{"name":"BadRoomToken"}`)
-	}
-}
-
-func onOneIpcams(room *controlRoom, info []byte) {
-	room.ipcams = json.RawMessage(info)
-	for _, ctrl := range room.onlines {
-		ctrl.SendChangeRoomContent(room.Id(), &room.ipcams)
+		room.Remove()
 	}
 }

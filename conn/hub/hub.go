@@ -54,26 +54,35 @@ func NewHub() Hub {
 }
 
 func (h *hub) Run() {
+	for {
+		h.run()
+	}
+}
+
+func (h *hub) run() {
 	defer func() {
 		if err := recover(); err != nil {
 			glog.Errorln(err)
 		}
 	}()
-	for {
-		select {
-		case msg := <-h.msg:
-			h.onMsg(msg)
-		case cmd := <-h.cmd:
-			h.onCmd(cmd)
-		case room := <-h.reg:
-			h.onReg(room)
-		case room := <-h.unreg:
-			h.onUnreg(room)
-		case many := <-h.join:
-			h.onJoin(many)
-		case many := <-h.leave:
-			h.onLeave(many)
-		}
+	select {
+	case msg := <-h.msg:
+		h.onMsg(msg)
+
+	case cmd := <-h.cmd:
+		h.onCmd(cmd)
+
+	case room := <-h.reg:
+		h.onReg(room)
+
+	case room := <-h.unreg:
+		h.onUnreg(room)
+
+	case many := <-h.join:
+		h.onJoin(many)
+
+	case many := <-h.leave:
+		h.onLeave(many)
 	}
 }
 
@@ -87,7 +96,7 @@ func (h *hub) onReg(room ControlRoom) {
 	}
 	for _, friend := range friends {
 		if many, ok := h.clients[friend.ID]; ok {
-			room.AddOnline(friend.ID, many)
+			room.AddOnline(friend.ID, many, room.Tag())
 		}
 	}
 }
@@ -136,7 +145,7 @@ func (h *hub) onJoin(many ControlUser) {
 	}
 	for _, one := range ones {
 		if room, ok := h.rooms[one.ID]; ok {
-			room.AddOnline(many.Id(), many)
+			room.AddOnline(many.Id(), many, many.Tag())
 		}
 	}
 }
