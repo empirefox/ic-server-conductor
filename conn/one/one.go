@@ -79,6 +79,7 @@ func (room *controlRoom) AddOnline(id uint, cu conn.ControlUser, tag string) {
 	case "room":
 		cu.Send([]byte(fmt.Sprintf(`{"type":"RoomOnline","ID":%d}`, room.Id())))
 	case "user":
+		cu.Send([]byte(fmt.Sprintf(`{"type":"RoomOnline","ID":%d}`, room.Id())))
 		room.send <- []byte(fmt.Sprintf(`{"from":%d,"name":"UserOnline"}`, id))
 	default:
 		glog.Errorln("Unknown tag:", tag)
@@ -112,10 +113,10 @@ func (room *controlRoom) writePump() {
 				return
 			}
 			if err := room.WriteMessage(websocket.TextMessage, msg); err != nil {
-				glog.Infoln("ws send err:", err, string(msg))
+				glog.Infoln("ws send err    :", err, string(msg))
 				return
 			}
-			glog.Infoln("ws send to one:", string(msg))
+			glog.Infoln("ws send to one :", string(msg))
 		}
 	}
 }
